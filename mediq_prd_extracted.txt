@@ -1,0 +1,461 @@
+
+PRODUCT REQUIREMENTS DOCUMENT
+MediQ
+The Multi-Hospital OPD Discovery, Booking & Live Queue Platform
+“Discover a hospital, pick a doctor, and track your OPD token live — the way you track a food order.”
+Production PRD  |  Version 3.0
+Prepared: 11 September 2026
+Owner: Product & Engineering
+
+0. Document Control
+Field
+Detail
+Document Title
+PRD – MediQ: Multi-Hospital OPD Discovery, Booking & Live Queue Platform
+Version
+3.0 (Production / Launch-Ready)
+Status
+Draft for Engineering Sign-off
+Owner
+Product Team, in partnership with Engineering, Clinical Ops & Design
+Predecessor Document
+v2.0 – “Hospital OPD Queue Tracker & Dynamic Token System” (single-hospital hackathon build)
+Product Model
+Two-sided marketplace connecting patients with hospitals, similar in structure to a food-delivery discovery app, applied to outpatient care
+Platforms
+Patient App (Flutter, Android/iOS), Doctor App (Flutter), Hospital Staff App (Flutter/Web), Hospital Admin Panel (React), Super Admin / Platform Panel (React)
+Backend
+Node.js (NestJS) microservices, PostgreSQL (multi-tenant), Redis (live queue + cache), WebSockets, Elasticsearch (search), Firebase Cloud Messaging (push)
+
+Revision History
+Version
+Change Description
+1.0 – 2.0
+Single-hospital hackathon build: Firebase-only stack, one hospital, one patient app, basic admin/reception panel.
+3.0
+Reframed as a multi-hospital marketplace (“Zomato for OPD”): hospital discovery & search, per-hospital department/doctor catalogues, production-grade multi-tenant architecture, Super Admin + Hospital Admin panels, monetisation model, compliance and scale considerations.
+1. Executive Summary
+Patients today have no single place to discover hospitals near them, compare OPD departments and doctors, and know how long a queue actually is before they leave home. Every hospital that has digitised its queue has done so in isolation — there is no cross-hospital discovery layer, the way food delivery apps created a discovery and ordering layer on top of individual restaurants that previously only took walk-ins or phone orders.
+MediQ is a multi-hospital OPD marketplace. A patient opens one app, searches by location, specialty, or symptom, browses a list of nearby hospitals with live wait-time indicators (much like browsing restaurants by delivery time), drills into a hospital to see its departments and doctors with today’s OPD schedule and current queue length, and either books a slot or checks in for a walk-in token — all from their phone. From that point, the experience mirrors order tracking: a live token position, an estimated time, and a notification when it’s nearly their turn.
+On the supply side, each hospital gets its own branded operational stack for free or on a subscription/commission basis: a Hospital Admin Panel to manage departments, doctors, staff and schedules; a Doctor App to run the queue from the consultation room; and a Reception/Staff App for walk-in check-in and queue control. A Super Admin Panel sits above all hospitals for the platform operator to onboard new hospitals, configure commissions, monitor marketplace-wide health, and moderate content.
+This version of the PRD moves the product from a single-hospital hackathon prototype to a production-grade, multi-tenant SaaS-plus-marketplace platform, with the architecture, data model, security, compliance and monetisation decisions that a real launch requires.
+Why This Problem Matters
+Patients currently have to call or visit multiple hospitals to compare wait times, doctor availability and specialties — there is no comparison layer, unlike almost every other consumer service today.
+Small and mid-size hospitals often cannot afford to build their own queue-management software; a shared platform gives them enterprise-grade tooling at marketplace economics.
+Reduces physical crowding and improves infection control across an entire city’s hospital network, not just one facility.
+Creates a data layer — city-wide OPD demand, specialty-wise congestion, doctor-wise throughput — that no single hospital could produce alone.
+One-Line Pitch
+“Just like Zomato lets you browse restaurants, check wait times and order — MediQ lets you browse hospitals, check OPD queues and get a live token, so you only walk in when your turn is close.”
+2. Problem Statement & Background
+2.1 Current State
+A patient decides they need to see a doctor but does not know which nearby hospital has the right specialist available today, or how long the wait currently is.
+They either call multiple hospital reception desks (often unanswered or vague), or simply go to the hospital they know and hope for the best.
+At the hospital, they stand in a physical line, get a paper token, and wait — with no visibility into position or delay, and no way to compare with a nearby alternative once they have already committed the trip.
+Hospitals that have digitised are single-hospital silos: a token app built for Hospital A tells you nothing about Hospital B’s queue.
+Hospital administrators have no cross-facility or even reliable single-facility data on wait times, throughput, or peak load to plan staffing.
+2.2 Key Pain Points by Stakeholder
+Stakeholder
+Pain Point
+Patient
+No way to discover or compare hospitals/doctors by real-time wait time; must commit to a hospital before knowing the queue length; anxious, unproductive waiting.
+Hospital (small/mid-size)
+Cannot justify building custom software for queue management or online discovery; loses walk-in patients to larger, more visible hospitals.
+Hospital Admin
+No dashboard across departments; manual staffing decisions; no visibility into patient drop-off or no-show rates.
+Doctor
+Interruptions to ask “how many patients are left”; no structured, app-driven “next patient” workflow.
+Reception Staff
+Manual, error-prone token allocation; no unified view when a hospital runs many departments in parallel.
+Platform Operator (new role in v3)
+No existing revenue model or governance layer connecting many hospitals — this is the gap MediQ is built to fill.
+2.3 Opportunity
+A discovery-plus-queue layer across many hospitals creates the same value food-delivery marketplaces created for restaurants: demand aggregation for hospitals that cannot market themselves individually, and a single trusted interface for patients. Because the core requirement is real-time state across a very large number of simultaneous queues (many hospitals × many departments × many patients), the system must be designed from day one for multi-tenant scale, not retrofitted onto a single-hospital prototype.
+3. Goals & Objectives
+3.1 Primary Goals
+Let a patient search and discover hospitals by location, specialty, symptom, or doctor name, with a live indicator of current OPD wait/load per hospital.
+Let a patient drill into a hospital’s profile to see its departments, doctors, today’s schedule, consultation fee, and current queue length before deciding to go.
+Let a patient book an appointment slot or check in for a walk-in token digitally, and track live position and ETA exactly as they would track a delivery.
+Give every onboarded hospital a full operational stack: Hospital Admin Panel, Doctor App, Reception/Staff App — configurable per hospital without engineering involvement.
+Give the platform operator a Super Admin Panel to onboard, verify, and monitor every hospital, configure commercial terms, and see marketplace-wide analytics.
+Support tens of thousands of concurrent patients across hundreds of hospitals with sub-2-second real-time queue updates.
+3.2 Secondary Goals
+Ratings & reviews per doctor/hospital to build trust signals, the way restaurant ratings do.
+Optional prepayment of consultation fee at booking time to reduce no-shows.
+Push/SMS/WhatsApp notifications when a patient’s token is 2–3 positions away.
+Commission- or subscription-based monetisation from hospitals, with a clear path to profitability.
+3.3 Non-Goals (Out of Scope for v1 Launch)
+Full EHR/EMR or clinical records system — MediQ manages discovery, scheduling and queue state only, not medical records.
+In-app video teleconsultation (flagged as a fast-follow, see Section 18).
+Insurance claims processing.
+Pharmacy or diagnostic lab marketplace (future extension, see Section 18).
+4. Target Users & Personas
+4.1 The Patient — Riya, 29
+Riya has a 9-to-6 job in a new city and doesn’t know which hospital is good for a dermatology consult. She wants to compare 2–3 nearby hospitals by wait time and doctor rating, book a slot in the one she picks, and get a live update so she doesn’t waste an afternoon sitting in a waiting room.
+4.2 The Hospital Owner/Administrator — Sunita, runs a 40-bed multi-specialty hospital
+Sunita wants more OPD footfall without hiring a marketing team, and wants a dashboard to manage her hospital’s departments, doctors and staff without depending on her own IT team, which she doesn’t have.
+4.3 The Receptionist — Anil, 45
+Anil checks in walk-in patients who don’t use the app, manages the queue across 6 different department counters at once, and needs one screen that shows all of them.
+4.4 The Doctor — Dr. Mehta
+Dr. Mehta wants a one-tap “next patient” control on a tablet, without needing to know or care how the app routed that patient to her.
+4.5 The Platform Operations Manager — Karan (new in v3)
+Karan works for the company running MediQ. He onboards new hospitals, verifies their registration/licensing documents, sets commission rates, and watches a marketplace-wide dashboard for anomalies — a hospital with a sudden spike in no-shows, or one that has gone offline.
+5. Product Model: The Marketplace Analogy
+Mapping MediQ’s structure onto the familiar food-delivery mental model makes the scope concrete for engineering and design:
+Food-Delivery Concept
+MediQ Equivalent
+Restaurant list / discovery feed
+Hospital discovery feed — sorted by distance, live wait time, rating
+Restaurant profile page
+Hospital profile page — departments, doctors, timings, photos, ratings
+Menu item
+Doctor listing — specialty, fee, today’s slots, current queue length
+Cart & checkout
+Slot booking / walk-in check-in, optional fee prepayment
+Order tracking screen
+Live token tracker — position, ETA, status
+Delivery partner app
+Doctor App + Reception/Staff App
+Restaurant partner dashboard
+Hospital Admin Panel
+Internal ops/city-launch dashboard
+Super Admin / Platform Panel
+Commission per order
+Commission per booking, or flat monthly SaaS fee per hospital
+6. Scope Definition
+6.1 In Scope — v1 Production Launch
+Patient App: location-based hospital discovery, search & filters (specialty, distance, rating, live wait time), hospital profile, doctor profile, slot booking, walk-in token check-in, live queue tracking, notifications, ratings & reviews, booking history.
+Doctor App: today’s queue, Call Next / Complete / Skip / Pause, patient history for that visit only (name, reason for visit — not full EHR).
+Hospital Staff/Reception App: manual walk-in check-in, multi-department live queue view, search patient, no-show handling, re-assignment between doctors.
+Hospital Admin Panel: department & doctor CRUD, schedule/slot configuration, staff account management, hospital-level analytics, billing/payout view.
+Super Admin Panel: hospital onboarding & KYC/document verification, commission & plan configuration, marketplace-wide analytics, review moderation, dispute handling, feature flags per hospital.
+Notifications: push (FCM) at minimum; SMS/WhatsApp as a configurable add-on per hospital plan.
+Payments: optional consultation-fee prepayment via a payment gateway (Razorpay/Stripe), plus hospital payout and platform commission ledgering.
+6.2 Out of Scope — v1
+Video teleconsultation.
+Integration with third-party Hospital Information Systems (HIS) or EHR/EMR platforms.
+Pharmacy, diagnostics/lab test booking.
+Insurance/TPA claim workflows.
+6.3 Assumptions
+A hospital can have many departments; a department can have many doctors; each doctor runs one active queue per day per hospital.
+Patients can check in digitally (self, via the app) or be added manually by reception for walk-ins without smartphones — both paths produce the same token record.
+Hospitals are onboarded and verified by the platform operator before they go live in patient-facing search results.
+7. User Stories
+ID
+As a…
+I want to…
+So that…
+US-01
+Patient
+search hospitals near me by specialty
+I can find the right OPD without calling around
+US-02
+Patient
+see a hospital’s current wait time before I decide to go
+I don’t commit to a trip blindly
+US-03
+Patient
+compare 2–3 hospitals side by side
+I can pick the fastest or best-rated option
+US-04
+Patient
+book a slot or check in for a walk-in token from my phone
+I don’t stand in a physical line
+US-05
+Patient
+track my live position and ETA
+I can run errands and return just in time
+US-06
+Patient
+get notified when my turn is close
+I don’t miss my turn while away
+US-07
+Patient
+rate my hospital/doctor visit afterward
+future patients get trustworthy signals
+US-08
+Hospital Admin
+add/edit departments, doctors and schedules myself
+I don’t depend on engineering support
+US-09
+Hospital Admin
+see analytics for my hospital only
+I can plan staffing and measure growth
+US-10
+Receptionist
+manage walk-ins across every department from one screen
+I can run a multi-counter OPD efficiently
+US-11
+Doctor
+call the next patient with one tap
+I don’t get interrupted mid-consultation
+US-12
+Platform Ops (Super Admin)
+onboard and verify a new hospital
+only legitimate hospitals appear in search
+US-13
+Platform Ops (Super Admin)
+configure commission/subscription per hospital
+the marketplace has a working revenue model
+US-14
+Platform Ops (Super Admin)
+see marketplace-wide health metrics
+I can catch outages or abuse quickly
+8. Core User Journeys
+8.1 Patient Journey — Discovery to Consultation
+Open app → grant/enter location → see a feed of nearby hospitals, each card showing distance, rating, and a live “current wait” badge.
+Filter by specialty (e.g., “Dermatology”) or search a symptom/doctor name.
+Open a hospital profile → see departments → open a department → see doctors with today’s slots, fee, and current queue length for each.
+Choose “Book a Slot” (fixed appointment time) or “Join Walk-in Queue” (get a live token now).
+Confirm details, optionally prepay the consultation fee, and receive a token/appointment confirmation.
+Track live position and ETA on the status screen; receive a notification when 2–3 positions away.
+Arrive, get called, consult; afterward, optionally rate the doctor and hospital.
+8.2 Hospital Onboarding Journey (Super Admin → Hospital Admin)
+Hospital applies via a public “List your hospital” form or is approached by the platform’s sales/ops team.
+Super Admin reviews registration documents (hospital registration certificate, doctor licences) and approves or rejects.
+On approval, a Hospital Admin account is created; the hospital is set to “onboarding” status (not yet visible in patient search).
+Hospital Admin adds departments, doctors, schedules, fees, and photos through the Hospital Admin Panel.
+Super Admin does a final review and flips the hospital to “live”, making it visible in patient-facing search.
+9. Functional Requirements
+9.1 Hospital Discovery & Search (Patient App)
+The home feed is the marketplace’s front door, directly analogous to a food-delivery home screen.
+Location detection (GPS or manually entered address/pincode) drives a distance-sorted default feed.
+Filters: specialty/department, distance radius, hospital rating, “open now” / OPD hours, live wait-time band (Low / Medium / High).
+Search bar supports hospital name, doctor name, specialty, and common symptom keywords mapped to specialties (e.g., “skin rash” → Dermatology).
+Each hospital card shows: name, photo, distance, star rating, and a live wait-time badge computed from current average queue length across its departments.
+Live Wait-Time Badge Logic
+hospitalWaitBadge = classify(  avg(currentQueueLength across all active department queues))// Low: avg <= 5 waiting patients// Medium: 6-15 waiting patients// High: > 15 waiting patients// Recomputed every time a token changes status; cached in Redis with a// short TTL so the discovery feed never hits Postgres directly.
+9.2 Hospital & Doctor Profile
+Hospital profile: photos, address & map, list of departments, aggregate rating, accepted plan (walk-in only / slot booking / both), operating hours.
+Department view: list of doctors in that department with individual ratings, fee, and today’s live queue length for each.
+Doctor profile: qualification, experience, consultation fee, today’s available slots (if slot-based) or current token count (if walk-in), and reviews.
+9.3 Booking & Token Generation
+MediQ supports two entry modes per doctor, configurable by the Hospital Admin: Walk-in Queue (patient receives the next sequential token immediately) and Slot Booking (patient reserves a fixed time window, and is auto-converted into the day’s queue at a priority position matching their slot time).
+Token Generation Logic (Walk-in)
+Each doctor’s queue maintains a running counter for the current day, scoped by hospitalId + doctorId + date. Token creation runs inside a database transaction to guarantee no two patients receive the same number under concurrent check-ins.
+BEGIN TRANSACTION  SELECT last_token FROM doctor_counters  WHERE hospital_id = :hid AND doctor_id = :did AND date = :today  FOR UPDATE;  next_token = last_token + 1;  UPDATE doctor_counters SET last_token = next_token WHERE ...;  INSERT INTO tokens (hospital_id, doctor_id, patient_id, token_number,                       status, source, created_at)  VALUES (:hid, :did, :pid, next_token, 'waiting', 'app', now());COMMIT;// Same transaction is reused whether the check-in originates from the// Patient App, the Reception App, or a slot-booking auto-conversion job.
+Slot-to-Queue Conversion
+A scheduled job runs at the start of each doctor’s OPD session and inserts that session’s confirmed slot bookings into the queue in slot-time order, before any same-day walk-ins are appended. This keeps booked patients prioritised over walk-ins while still using one unified queue/token model downstream, so the live-tracking and Doctor App logic never needs to know which path a patient came from.
+9.4 Live Queue Tracking (Patient App)
+Real-time position: count of tokens with status = ‘waiting’ and a lower token number, scoped to that doctor and date.
+Estimated wait time: position × rolling average consultation time for that doctor (last 15 completed consultations), recalculated continuously.
+Status badge: Waiting → You’re Next → In Progress → Completed / No-show / Cancelled.
+Delivered via WebSocket subscription (or Firestore-style listener if Firebase is used for the real-time layer) so the screen updates with zero manual refresh.
+9.5 Doctor App
+Action
+Effect
+Result
+Call Next
+Finds lowest-numbered ‘waiting’ token for that doctor/date, sets status ‘in-progress’
+Token appears on Doctor App and hospital’s waiting-room display
+Mark Complete
+Sets current ‘in-progress’ token to ‘completed’, records duration
+Duration feeds the rolling-average ETA calculation
+Skip
+Sets token to ‘skipped’, moves to next ‘waiting’ token
+Skipped patient can be re-queued by reception
+Pause Queue
+Freezes ‘Call Next’ for that doctor (e.g., emergency, break)
+Patients see a ‘Doctor is on a short break’ banner instead of a stalled ETA
+9.6 Reception / Hospital Staff App
+Multi-department live queue view: every active doctor’s queue for the hospital, in one screen.
+Manual walk-in check-in for patients without the app (reuses the same token-generation transaction as 9.3).
+Search by name, phone, or token number; mark No-Show; re-assign a token to a different doctor/department.
+9.7 Hospital Admin Panel
+Department & Doctor management: add/edit/deactivate departments and doctors, set consultation fee, booking mode (walk-in/slot/both), and OPD hours.
+Schedule/slot configuration: define slot duration and daily capacity per doctor for slot-booking mode.
+Staff management: create Reception and Doctor accounts, assign roles.
+Hospital analytics: patients served per day, average wait time, no-show rate, department-wise load, rating trend.
+Billing/payout view: bookings processed, commission deducted, net payout, invoice history.
+Review moderation for their own hospital (flag for Super Admin review; cannot delete reviews outright).
+9.8 Super Admin / Platform Panel
+Hospital onboarding queue: review submitted documents, approve/reject, set initial commission or subscription plan.
+Marketplace-wide analytics: total hospitals live, total bookings/day, GMV (consultation fees processed), city-wise heatmap of demand.
+Commercial configuration: per-hospital commission percentage or flat SaaS fee, promotional placement (featured hospitals in search, similar to sponsored restaurant listings).
+Trust & safety: review/report moderation across all hospitals, ability to suspend a hospital or a specific doctor account.
+Operational health: alerting on hospitals with abnormal no-show spikes, stalled queues (no ‘Call Next’ activity for an unusual duration), or app crash-rate anomalies.
+9.9 Notifications
+Push notification (FCM) when a patient’s token reaches 2–3 positions away, and again when they are ‘Next’.
+Booking confirmation and reminder notifications for slot bookings (e.g., 1 hour before).
+SMS/WhatsApp channel available as a paid add-on per hospital plan, via a provider such as MSG91/Twilio/WhatsApp Business API.
+9.10 Ratings & Reviews
+Patients can rate a doctor and the hospital (1–5 stars + optional text) only after a completed visit, preventing fake pre-visit reviews.
+Aggregate ratings roll up to the hospital and doctor profile cards shown in discovery/search.
+9.11 Payments (Optional Prepayment)
+At booking time, a hospital can require prepayment of the consultation fee via an integrated payment gateway.
+Platform commission is calculated and ledgered at the same time; hospital payouts are batched (e.g., weekly) net of commission.
+Refund/cancellation policy is configurable per hospital (e.g., free cancellation up to 1 hour before slot time).
+10. Data Model (Multi-Tenant)
+Every core entity is scoped by hospital_id to enforce multi-tenancy at the data layer, not just in application logic. A relational store (PostgreSQL) is used as the system of record for structured, query-heavy, cross-tenant reporting data; a fast in-memory layer (Redis) mirrors live queue state for sub-second reads on the patient-facing tracking screen.
+Table
+Key Fields
+Notes
+hospitals
+id, name, address, geo (lat/lng), status (onboarding/live/suspended), plan_type, commission_rate
+Root tenant entity; status gates visibility in patient search
+departments
+id, hospital_id, name, description
+Belongs to one hospital
+doctors
+id, hospital_id, department_id, name, qualification, fee, booking_mode
+booking_mode: walk-in / slot / both
+doctor_schedules
+id, doctor_id, day_of_week, start_time, end_time, slot_duration
+Drives slot generation for slot-booking mode
+doctor_counters
+hospital_id, doctor_id, date, last_token
+One row per doctor per day; source of atomic token numbers
+tokens
+id, hospital_id, doctor_id, patient_id, token_number, status, source, called_at, completed_at
+Unified record for both walk-in and slot-derived patients
+appointments
+id, hospital_id, doctor_id, patient_id, slot_time, status
+Pre-conversion booking record; converts into a token at session start
+patients
+id, name, phone, auth_id
+Platform-wide identity, not hospital-scoped
+staff_users
+id, hospital_id, role (admin/reception/doctor), auth_id
+role + hospital_id drives access control
+reviews
+id, hospital_id, doctor_id, patient_id, rating, text, visit_id
+Only writable after a completed token/appointment
+payments
+id, hospital_id, token_id/appointment_id, amount, commission_amount, status
+Feeds hospital payout batches and platform GMV reporting
+Real-Time Layer
+On every token status change, the write path updates PostgreSQL (system of record) and publishes an event to Redis Pub/Sub, which a WebSocket gateway fans out to subscribed clients: the patient tracking that specific token, the doctor’s queue view, the reception dashboard, and any public waiting-room display — mirroring the onSnapshot pattern from the v2 hackathon build, but built to scale across many hospitals rather than one Firestore project.
+11. System Architecture
+11.1 Why Not Just Scale the Hackathon’s Firebase Stack
+The v2 hackathon build used Firestore directly as both the system of record and the real-time layer — a good fit for one hospital and a 24-hour build. A multi-hospital marketplace adds requirements Firestore alone handles less naturally: complex cross-tenant analytics and reporting, relational integrity between hospitals/departments/doctors/patients/payments, geo-radius search combined with filters, and a formal commission/payout ledger. The recommended production architecture therefore separates concerns: a relational system of record, a dedicated fast real-time layer, and a search index — while still keeping Firebase for what it’s best at, push notifications.
+11.2 Recommended Stack
+Layer
+Technology
+Purpose
+Patient App
+Flutter (Android/iOS)
+Discovery, booking, live tracking
+Doctor App
+Flutter
+Queue control from the consultation room
+Hospital Staff App
+Flutter or responsive Web
+Walk-in check-in, multi-department queue view
+Hospital Admin Panel
+React (Web)
+Per-hospital configuration & analytics
+Super Admin Panel
+React (Web)
+Platform-wide onboarding, commercial config, trust & safety
+API Layer
+Node.js (NestJS), REST + WebSocket gateway
+Business logic, auth, multi-tenant access control
+System of Record
+PostgreSQL (with PostGIS for geo-radius search)
+Hospitals, departments, doctors, tokens, payments
+Real-Time Cache/Pub-Sub
+Redis
+Live queue state, wait-time badges, WebSocket fan-out
+Search
+Elasticsearch (or Postgres full-text as a v1 shortcut)
+Hospital/doctor/specialty search with filters
+Notifications
+Firebase Cloud Messaging + SMS/WhatsApp provider
+Push, SMS, WhatsApp alerts
+Payments
+Razorpay / Stripe
+Consultation fee prepayment, hospital payouts
+Hosting/Infra
+AWS or GCP, containerised services (ECS/GKE), CDN for static assets/images
+Horizontal scalability, multi-region readiness
+For teams wanting to preserve the original Firebase-centric approach for a faster v1, a hybrid path is viable: keep Firestore as the real-time queue layer (one Firestore project, with every document namespaced by hospitalId) while adding PostgreSQL purely for reporting, payments and search. This is a reasonable transitional architecture but should be treated as a stepping stone, not the end state, once hospital count and analytics needs grow.
+12. Non-Functional Requirements
+Category
+Requirement
+Scalability
+Support 500+ hospitals and 50,000+ concurrent live-tracking sessions at launch scale, horizontally scalable beyond that.
+Performance
+Real-time queue update latency under 2 seconds end-to-end; discovery feed loads under 1.5 seconds on 4G.
+Availability
+99.9% uptime target for booking and live-tracking services; graceful degradation (cached last-known queue state) during transient backend issues.
+Multi-Tenancy & Security
+Strict hospital_id scoping on every query; role-based access control (Super Admin > Hospital Admin > Doctor/Reception); no staff account can access another hospital’s data.
+Data Privacy & Compliance
+Patient data (name, phone, visit reason) treated as sensitive personal data; align with India’s Digital Personal Data Protection (DPDP) Act and, where relevant, Ayushman Bharat Digital Mission (ABDM) interoperability standards; no medical record storage in v1 to limit compliance surface area.
+Auditability
+Every token status change and payment event is immutably logged for dispute resolution and financial reconciliation.
+Observability
+Centralised logging/metrics/alerting across all microservices; Super Admin operational-health alerts described in Section 9.8.
+13. Monetisation Model
+Commission per completed booking/token (a percentage of consultation fee), charged to the hospital — the direct marketplace analogue of a delivery commission.
+Flat monthly SaaS subscription per hospital as an alternative plan, for hospitals that prefer predictable cost over per-booking commission.
+Featured/sponsored placement for hospitals in discovery search results, configured via the Super Admin Panel.
+Optional paid add-ons for hospitals: SMS/WhatsApp notification credits, advanced analytics tier.
+14. Delivery Roadmap
+14.1 Phase 1 — MVP (0–3 months)
+Single-city launch: hospital onboarding flow (manual, ops-assisted), Patient App discovery + walk-in token flow, Doctor App, Reception App, basic Hospital Admin Panel, basic Super Admin Panel.
+Core real-time queue and token engine, PostgreSQL + Redis architecture, push notifications.
+14.2 Phase 2 — Marketplace Depth (3–6 months)
+Slot booking with prepayment, ratings & reviews, Elasticsearch-backed search with full filters, hospital analytics dashboard, commission/payout automation.
+14.3 Phase 3 — Scale & Expansion (6–12 months)
+Multi-city rollout, featured listings/ads, SMS/WhatsApp add-on, self-serve hospital onboarding (reducing ops involvement), fraud/abuse detection.
+15. Success Metrics / KPIs
+Metric
+Target
+Hospitals live on platform
+50+ within first 3 months of a city launch
+Daily active patients
+Track week-over-week growth; target 15% MoM growth post-launch
+Booking completion rate
+> 85% of started check-ins/bookings completed successfully
+Real-time update latency
+Under 2 seconds between a staff action and patient screen update
+No-show rate
+< 10% for prepaid slot bookings
+Average hospital rating
+4.0+ average across live hospitals
+Platform GMV
+Total consultation-fee value processed through the platform, tracked monthly
+16. Risks & Mitigations
+Risk
+Mitigation
+Hospitals resist adding another system to their front desk
+Zero-cost onboarding tier, white-glove setup support in Phase 1, simple staff apps requiring minimal training
+Cold-start problem: patients need hospitals, hospitals need patients
+Ops-led hospital acquisition per launch city before consumer marketing; seed with anchor hospitals first
+Real-time layer becomes a bottleneck at scale
+Redis Pub/Sub + WebSocket gateway designed to shard by hospital_id from day one; load-test before each city launch
+Patient data sensitivity / compliance exposure
+Store only visit-logistics data, not clinical records; align with DPDP Act; encrypt PII at rest
+Hospitals game ratings or wait-time badges
+Ratings only post-visit; wait-time badge computed from server-side token state, not self-reported by hospitals
+17. Future Enhancements (Post v1)
+In-app video teleconsultation for follow-up visits.
+Integration with Hospital Information Systems (HIS) / ABDM health records for patients who opt in.
+Pharmacy and diagnostic lab booking bundled with the OPD visit.
+AI-based wait-time prediction using historical, day-of-week and seasonal patterns, rather than a simple rolling average.
+Insurance/TPA integration for cashless OPD consultations.
+Multi-language support for regional-language patients.
+Loyalty/rewards program for repeat patients across the hospital network.
+Corporate/employer tie-ups for panel-hospital discovery (an “employee health benefit” view).
+18. Appendix
+18.1 Glossary
+Term
+Meaning
+OPD
+Out-Patient Department — hospital department handling patients who do not require overnight admission
+Token
+A digital record marking a patient’s position in a specific doctor’s queue for a given day
+Multi-Tenant
+An architecture where one platform instance serves many independent hospitals (“tenants”), each with isolated data
+Super Admin
+Platform-operator role with visibility and control across all onboarded hospitals
+Hospital Admin
+Hospital-level role that manages that hospital’s own departments, doctors, staff and analytics
+GMV
+Gross Merchandise Value — total value of consultation fees processed through the platform
+DPDP Act
+India’s Digital Personal Data Protection Act, governing handling of personal data
+ABDM
+Ayushman Bharat Digital Mission — India’s digital health record interoperability framework
+18.2 Relationship to the Original Hackathon PRD
+This document supersedes the earlier “Hospital OPD Queue Tracker & Dynamic Token System” (v2.0), which scoped a single-hospital, Firebase-only hackathon build. Every feature from that document — check-in, live queue status, reception dashboard, doctor dashboard, public waiting-room display, basic analytics — is preserved here at the single-hospital level (Sections 9.4–9.7), but wrapped in a multi-hospital discovery layer, multi-tenant data model, and platform-operator layer that the hackathon scope intentionally left out.

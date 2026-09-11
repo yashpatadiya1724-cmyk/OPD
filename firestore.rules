@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Doctors collection and sub-collections
+    match /doctors/{doctorId} {
+      // Public read; write allowed for staff / hackathon demo mode
+      allow read, write: if true;
+
+      // Tokens sub-collection
+      match /tokens/{tokenId} {
+        // Anyone can read tokens (patients & public TV display)
+        // Patient self check-in creates tokens without login
+        // Staff and doctors update status (Call Next, Complete, Skip)
+        allow read, write: if true;
+      }
+
+      // Daily counters sub-collection (transaction-guarded)
+      match /counters/{dateKey} {
+        allow read, write: if true;
+      }
+    }
+
+    // Staff accounts
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Daily statistics for Admin analytics
+    match /dailyStats/{statId} {
+      allow read, write: if true;
+    }
+
+    // Hospitals directory (Zomato for hospitals)
+    match /hospitals/{hospitalId} {
+      allow read, write: if true;
+    }
+
+    // Patient Reviews & Ratings
+    match /reviews/{reviewId} {
+      allow read, write: if true;
+    }
+
+    // Slot Bookings & Appointments
+    match /appointments/{appointmentId} {
+      allow read, write: if true;
+    }
+
+    // OPD Visit History
+    match /history/{historyId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,716 @@
+
+PRODUCT REQUIREMENTS DOCUMENT
+Hospital OPD Queue Tracker &
+Dynamic Token System
+A Real-Time, Firebase-Powered OPD Queue Management Platform
+HealthTech Track  |  Hackathon Problem Statement 2.4
+Version 2.0
+Prepared: 11 September 2026
+Patient App & Doctor App: Flutter (Mobile)  |  Admin/Reception Panel: React (Web)
+Backend: Firebase (Firestore, Auth, Cloud Functions, FCM, Hosting)
+
+0. Document Control
+Field
+Detail
+Document Title
+PRD - Hospital OPD Queue Tracker & Dynamic Token System
+Version
+1.0
+Status
+Draft for Hackathon Build
+Owner
+Product / Engineering Team
+Backend Platform
+Google Firebase (Firestore, Auth, Cloud Functions, Cloud Messaging, Hosting)
+Target Event
+Multi-Disciplinary Hackathon - HealthTech Track
+Build Duration
+24-36 hours (hackathon sprint)
+
+Revision History
+Version
+Date
+Author
+Change Description
+0.1
+Day 0
+Product Team
+Initial draft - problem framing and scope
+1.0
+Day 0
+Product Team
+Complete PRD with data model, logic, and roadmap
+2.0
+Day 0
+Product Team
+Updated stack: Flutter for Patient + Doctor apps, React for Admin/Reception panel
+
+1. Executive Summary
+Outpatient Departments (OPDs) in most hospitals and clinics still rely on physical queues, paper tokens, or shouted names to manage patient flow. This creates crowded waiting rooms, unpredictable wait times, poor visibility for patients, and inefficient staff coordination. Patients often arrive early and wait for hours in a physically packed space, which is not only uncomfortable but also a genuine health risk during infectious-disease seasons.
+The Hospital OPD Queue Tracker & Dynamic Token System is a real-time platform that digitizes the token issuance and queue management process, built as three connected apps on one Firebase backend: a Patient Flutter app, a Doctor Flutter app, and a React Admin/Reception web panel. Patients receive a digital token upon registration and can track their live position and estimated wait time from their own phone, without needing to be physically present in the waiting area. Reception staff and doctors get a live operational view to call, skip, pause, or complete tokens, with every change reflected instantly on all connected devices.
+The system is built entirely on Firebase, which allows the team to ship a fully functional, real-time, multi-user application within a hackathon timeframe without writing or hosting a traditional backend server. Firestore's real-time listeners replace the need for custom WebSocket infrastructure, Firebase Authentication handles staff and patient identity, and Cloud Functions handle server-side business logic such as queue recalculation and notification triggers.
+Why This Problem Matters
+Reduces physical crowding in hospital waiting areas, which directly improves infection control.
+Gives patients control and transparency over their own wait time instead of anxious uncertainty.
+Reduces the operational load on reception staff who currently manage queues manually or on paper.
+Demonstrates a clean, real-world, sellable use of Firebase's real-time capabilities - ideal for a hackathon demo.
+One-Line Pitch
+"Just like tracking a food delivery order, patients can track their OPD token in real time and walk in only when their turn is near."
+Competitive Landscape & What Makes This Different
+OPD queue and token management is not a new category - established products such as Cliniqwise, Ezovion, Webprint, NZCares, EMed HealthTech, and the Government of India's eHospital app already offer QR-based check-in, doctor-wise token queues, and SMS/WhatsApp status updates. This PRD does not claim to invent the category; it claims to execute a focused, real-time version of it within a hackathon timeframe, plus one feature none of the listed competitors currently offer.
+All existing products tell the patient their queue position and an estimated wait time - and stop there.
+None of them combine that with the patient's actual live location and real-time travel time to tell them exactly when to leave home. This system does, via the Smart Leave-Now Engine described in Section 7.9 - the project's signature, hardest-to-copy feature.
+None of them continue the patient's journey past the doctor's door. This system automatically hands off to a linked pharmacy token and compares nearby pharmacy prices and distances, described in Sections 7.10 and 7.11.
+2. Problem Statement & Background
+2.1 Current State
+In a typical OPD setting today, the patient journey looks like this:
+1. Patient arrives at the hospital and stands in a physical line at the reception counter.
+2. Reception staff manually writes or prints a token number on paper.
+3. The patient sits in a waiting area and listens for their number or name to be called aloud.
+4. If the patient steps away (for a coffee, a phone call, to accompany a child to the washroom), they risk missing their turn.
+5. Reception staff have no easy way to see how many patients are pending, how long each consultation is taking, or communicate delays.
+2.2 Key Pain Points
+Stakeholder
+Pain Point
+Patient
+No visibility into wait time; must be physically present; anxiety and frustration during long waits.
+Reception Staff
+Manual token allocation is error-prone; no record of who has been served; difficult to manage multiple doctors/counters.
+Doctor
+No structured view of who is next; interruptions from patients asking "how much longer".
+Hospital Administration
+No data on average wait time, peak hours, or doctor-wise throughput to plan staffing.
+2.3 Opportunity
+A lightweight, real-time digital queue removes the need for physical presence during the wait, converts an opaque process into a transparent one, and produces operational data that hospital administrators can use to improve staffing and scheduling decisions. Because the core requirement is real-time state synchronization across multiple simultaneous viewers (patient phones, reception dashboard, doctor dashboard, and a public waiting-room display), Firebase Firestore is an ideal fit: it is purpose-built for exactly this kind of live, multi-client data synchronization.
+
+3. Goals & Objectives
+3.1 Primary Goals
+Allow a patient to receive a digital token without needing a physical printer or counter interaction.
+Allow a patient to view their live position in the queue and an estimated wait time from any device.
+Allow reception/doctor staff to manage the queue (call next, skip, mark complete, pause) from a simple dashboard.
+Ensure all views (patient, staff, public display) update in real time with no manual refresh.
+Keep the system simple enough to build, demo, and explain within a hackathon timeframe.
+3.2 Secondary Goals
+Provide basic analytics to hospital admins - average wait time, tokens served per day, peak hours.
+Send a notification (push or SMS-simulated) to a patient when their token is 2-3 positions away.
+Support multiple doctors / departments running independent queues in parallel.
+3.3 Non-Goals (Out of Scope for v1)
+Integration with real hospital information systems (HIS) or electronic health records (EHR).
+Real SMS gateway integration (a simulated/mock SMS log is sufficient for a hackathon demo).
+Payment processing for consultation fees.
+Publishing to the Play Store / App Store (v1 runs via debug builds/APK links for the demo, not a public store listing).
+
+4. Target Users & Personas
+4.1 Persona 1 - The Patient (Riya, 29)
+Riya visits a busy multi-specialty clinic for a routine consultation. She has a 9-to-6 job and cannot afford to sit in a waiting room for two hours. She wants to know roughly when her turn will come so she can run an errand nearby and return just in time.
+4.2 Persona 2 - The Receptionist (Anil, 45)
+Anil manages patient check-ins at the front desk. He currently writes token numbers on a register and calls out names. He wants a faster way to register patients and a clear view of who is waiting for which doctor.
+4.3 Persona 3 - The Doctor (Dr. Mehta)
+Dr. Mehta wants a distraction-free way to know who the next patient is without reception staff interrupting the consultation to ask. A simple "Call Next" button on a tablet next to her desk is ideal.
+4.4 Persona 4 - The Hospital Administrator (Sunita)
+Sunita oversees OPD operations across departments. She wants basic visibility into how many patients were served, how long the average wait was, and which time slots are most congested, so she can plan staffing.
+
+5. Scope Definition
+5.1 In Scope (v1 - Hackathon Build)
+Patient self check-in via a Flutter mobile app (name, phone number, department/doctor selection).
+Automatic token number generation per doctor/department per day.
+Live queue status screen for patients in the Flutter app (position, estimated wait, status).
+Reception/Admin panel (React web app) to view and manage the full queue.
+Doctor Flutter app with a simplified "Call Next / Complete / Skip" control.
+Public waiting-room display view (React web, large-screen friendly) showing "Now Serving" tokens.
+Role-based login for staff (Receptionist, Doctor, Admin) via Firebase Authentication, shared across all three apps.
+Basic admin analytics page in the React panel (tokens served, average wait time, daily summary).
+Native push notification (FCM) to the Flutter patient app when a patient's token is near.
+5.2 Out of Scope (v1)
+Multi-hospital / multi-branch support.
+Insurance, billing, or payment workflows.
+Native iOS/Android apps.
+Doctor teleconsultation / video integration.
+5.3 Assumptions
+Each doctor/department has one active queue per day; queues reset daily.
+Patients check in either digitally (self, via link/QR at entrance) or are added manually by reception for walk-ins without smartphones.
+The hackathon demo environment uses Firebase's free Spark plan, which is sufficient for expected demo-level traffic.
+
+6. User Stories
+ID
+As a...
+I want to...
+So that...
+US-01
+Patient
+check in digitally and receive a token
+I don't have to stand in a physical line
+US-02
+Patient
+see my live position and estimated wait time
+I can plan my time outside the hospital
+US-03
+Patient
+get notified when my turn is close
+I can return to the waiting area just in time
+US-04
+Receptionist
+add a walk-in patient manually
+patients without smartphones are still served
+US-05
+Receptionist
+view the full live queue for all doctors
+I can manage congestion and re-route patients
+US-06
+Doctor
+call the next patient with one tap
+I don't need reception to interrupt me
+US-07
+Doctor
+skip a patient who is not present
+the queue keeps moving without delay
+US-08
+Admin
+view daily analytics of wait time and throughput
+I can plan staffing for peak hours
+US-09
+Any staff
+log in with role-based access
+patients cannot access staff controls
+US-10
+Patient
+view queue status without creating an account
+the check-in process stays fast and frictionless
+
+7. Functional Requirements
+This section describes every feature of the system in detail, along with the underlying logic and how each feature is implemented on Firebase.
+7.1 Feature: Patient Self Check-In & Token Generation
+This is the entry point of the system. A patient scans a QR code posted at the hospital entrance, which deep-links into the Patient Flutter app (or prompts a first-time install via the Play Store/App Store link if not already installed). Inside the app, a lightweight check-in form is shown. No account/login is required for patients - the app uses Firebase Anonymous Authentication in the background purely to get a stable device identity for notifications, keeping the actual sign-up friction at zero.
+Check-in Form Fields
+Field
+Type
+Required
+Notes
+Full Name
+Text
+Yes
+Used for display on staff dashboard only
+Phone Number
+Text (10 digit)
+Yes
+Used as a soft identity key + notification target
+Department / Doctor
+Dropdown
+Yes
+Determines which queue the token belongs to
+Reason for visit (optional)
+Text
+No
+Purely informational for staff, not diagnostic
+Token Generation Logic
+Each doctor/department queue maintains a running counter for the current day. When a patient submits the check-in form, the system executes the following logic inside a Firestore transaction (to avoid two patients receiving the same token number if they check in at the exact same millisecond):
+1. Read the current counter value for the selected doctor's queue document for today's date.
+2. Increment the counter by 1 inside a Firestore transaction (guarantees atomicity even under concurrent writes).
+3. Create a new document in the tokens sub-collection with the new token number, patient details, status = "waiting", and a server timestamp.
+4. Return the token number and token ID to the Patient Flutter app, which stores it locally on-device (SharedPreferences) so the status screen re-opens directly on next app launch.
+5. The app navigates automatically to the Live Status screen for that token, so the patient never has to note down or re-enter anything.
+// Pseudocode - Token generation using a Firestore transactionasync function generateToken(doctorId, patientData) {  const counterRef = doc(db, `doctors/${doctorId}/counters/${todayDateKey}`);  return await runTransaction(db, async (tx) => {    const counterSnap = await tx.get(counterRef);    const current = counterSnap.exists() ? counterSnap.data().lastToken : 0;    const nextToken = current + 1;    tx.set(counterRef, { lastToken: nextToken }, { merge: true });    const tokenRef = doc(collection(db, `doctors/${doctorId}/tokens`));    tx.set(tokenRef, {      tokenNumber: nextToken,      ...patientData,      status: 'waiting',      createdAt: serverTimestamp()    });    return { tokenId: tokenRef.id, tokenNumber: nextToken };  });}
+Using a transaction here is critical: without it, two patients checking in simultaneously could both read the same "last token = 14" value and both be assigned token 15, causing a collision. Firestore transactions guarantee that concurrent writes to the same counter document are serialized safely.
+7.2 Feature: Live Queue Status (Patient View)
+Once a token is generated, the Patient Flutter app subscribes to a real-time Firestore listener (via cloud_firestore's snapshots() stream) on their specific token document, as well as a query listener on the doctor's queue to calculate their live position.
+What the Patient Sees
+Their token number, large and prominent.
+Current "Now Serving" token number for that doctor.
+Number of patients ahead of them in the queue.
+An estimated wait time (see calculation logic below).
+A status badge: Waiting / You're Next / In Progress / Completed / Skipped.
+Position & Estimated Wait Time Calculation
+Position is calculated client-side (or via a Cloud Function for consistency) by counting how many tokens in the same doctor's queue have status = "waiting" and a token number lower than the patient's own token number.
+// Position calculationposition = count( tokens where status == 'waiting'                   AND tokenNumber < myTokenNumber                   AND doctorId == myDoctorId )// Estimated wait timeavgConsultationTime = rollingAverage(last 10 completed consultations for this doctor)estimatedWaitMinutes = position * avgConsultationTime
+The rolling average of the last 10 completed consultations (tracked via timestamps recorded when a doctor marks a token 'in-progress' and then 'completed') gives a realistic, self-adjusting estimate rather than a hardcoded fixed number per patient. This means the estimate automatically becomes more accurate as the day progresses and more real consultation data is collected.
+Real-Time Sync Behaviour
+The patient's screen requires zero manual refresh. This is achieved using Firestore's onSnapshot() listener, which pushes any change in the queue (a new token added, a token marked complete, a token skipped) to every subscribed client within milliseconds. This is the single most important demo moment: showing two screens side by side and calling 'Next' on one to instantly update the other.
+7.3 Feature: Reception Dashboard
+The reception dashboard is a protected, authenticated view used by front-desk staff to manage the entire day's queue across all doctors.
+Capabilities
+View all active queues (grouped by doctor/department) in one screen.
+Add a walk-in patient manually (for patients without a smartphone).
+Search a patient by name, phone number, or token number.
+Manually mark a token as "No Show" if a patient never appears after being called.
+Re-assign a patient's token to a different doctor if needed (e.g., wrong department selected).
+View a live count: total waiting, total completed today, total no-shows.
+Manual Add-Patient Logic
+This reuses the exact same generateToken() transaction logic described in Section 7.1, simply triggered from the staff dashboard instead of the patient's own device. This keeps the codebase DRY (one function, two entry points) and guarantees token numbering stays consistent regardless of who initiates check-in.
+7.4 Feature: Doctor Dashboard
+A minimal, distraction-free interface intended for a tablet or small screen placed on the doctor's desk.
+Controls
+Action
+Effect on Firestore
+UI Result
+Call Next
+Finds the lowest-numbered token with status 'waiting', updates it to 'in-progress', records calledAt timestamp
+Token number appears in large text; broadcast to public display
+Mark Complete
+Updates current in-progress token to 'completed', records completedAt timestamp
+Consultation duration is calculated and fed into the rolling average
+Skip / No Show
+Updates token status to 'skipped'; token is excluded from position counts but stored for records
+Queue automatically moves to the next waiting token
+Pause Queue
+Sets a queuePaused=true flag on the doctor's queue document
+All patient screens show 'Doctor is on a short break' banner
+Call Next Logic
+async function callNext(doctorId) {  const q = query(    collection(db, `doctors/${doctorId}/tokens`),    where('status', '==', 'waiting'),    where('date', '==', todayDateKey),    orderBy('tokenNumber', 'asc'),    limit(1)  );  const snap = await getDocs(q);  if (snap.empty) return null; // queue is empty  const nextDoc = snap.docs[0];  await updateDoc(nextDoc.ref, {    status: 'in-progress',    calledAt: serverTimestamp()  });  return nextDoc.data();}
+7.5 Feature: Public Waiting-Room Display
+A large, read-only screen intended to be displayed on a TV/monitor in the physical waiting room, for patients who choose to wait on-site or who do not have a smartphone.
+Shows 'Now Serving' token number per doctor, in large font.
+Shows the next 3 upcoming token numbers per doctor.
+Auto-refreshes via the same real-time Firestore listener pattern - no page reload required.
+Requires no authentication (public read-only Firestore security rule, described in Section 11).
+7.6 Feature: Notifications
+To reduce the need for patients to constantly check their phone, the system proactively notifies them at key milestones.
+Trigger Points
+Trigger
+Condition
+Notification Message
+Token Created
+Immediately after check-in
+"Your token is #{tokenNumber}. Estimated wait: {X} mins."
+Almost Your Turn
+Position becomes 3
+"You're 3 patients away. Please head to the waiting area."
+You're Next
+Position becomes 1
+"You are next! Please be ready."
+Called
+Status changes to in-progress
+"It's your turn now. Please proceed to Room {X}."
+Doctor Paused
+queuePaused flag set true
+"There is a short delay. We'll notify you when it resumes."
+Implementation Logic
+Notifications are implemented using a Cloud Function triggered on Firestore document writes (onUpdate trigger on the tokens collection). Whenever a token's status or the queue's position count changes, the function checks whether a notification threshold has been crossed and, if so, sends a push notification via Firebase Cloud Messaging (FCM) to the patient's registered device token, delivered natively through firebase_messaging in the Flutter app. For the hackathon demo, if push permission is not granted on the device, the system falls back to a simple in-app banner on the Live Status screen, so the demo works reliably even without notification permissions.
+exports.onTokenStatusChange = functions.firestore  .document('doctors/{doctorId}/tokens/{tokenId}')  .onUpdate(async (change, context) => {    const before = change.before.data();    const after = change.after.data();    if (before.status !== after.status) {      if (after.status === 'in-progress') {        await sendNotification(after.deviceToken, 'It is your turn now.');      }    }    // Recompute positions for all waiting patients in this doctor's queue    // and notify anyone whose position just became 3 or 1.  });
+7.7 Feature: Admin Analytics Dashboard
+A simple reporting screen for hospital administrators, built on aggregated Firestore data (no external analytics tool needed for the hackathon scope).
+Total patients served today, per doctor and overall.
+Average wait time and average consultation duration, per doctor.
+Peak check-in hour (simple bar chart by hour of day).
+No-show / skip rate as a percentage.
+These metrics are computed from the same tokens collection by aggregating createdAt, calledAt, and completedAt timestamps - no separate analytics pipeline is required for a hackathon-scale demo.
+7.8 Feature: Role-Based Authentication
+Role
+Access
+Firebase Auth Method
+Patient
+No login required; access via unique token link only
+None (anonymous)
+Receptionist
+Reception dashboard, manual check-in, search
+Email/password or Google Sign-In
+Doctor
+Own queue dashboard only (Call Next / Complete / Skip)
+Email/password
+Admin
+Full analytics + all queues, read-only across doctors
+Email/password
+Roles are stored as a custom field (role: 'receptionist' | 'doctor' | 'admin') on a users collection document, and enforced both in the UI (hiding controls) and at the data layer via Firestore Security Rules, described in Section 11. Relying on UI-hiding alone is not sufficient security - rules enforcement at the database layer is what actually prevents a patient or unauthorized user from writing to a token they should not control.
+7.9 Signature Feature: Smart Leave-Now Engine (Reverse ETA Sync)
+  This is the project's key differentiator. Existing OPD queue products (Cliniqwise, Ezovion, Webprint, NZCares, EMed HealthTech, and the Government eHospital app) all tell the patient their queue position and an estimated wait time. None of them tell the patient when to actually leave home. This feature closes that gap by combining the live queue ETA with a live, traffic-aware travel-time estimate.
+Problem It Solves
+A patient who checks in remotely still has to guess when to leave for the hospital. Leaving too early recreates the exact physical-waiting-room problem this whole system was built to remove. Leaving too late risks missing the call and being marked a no-show. The Smart Leave-Now Engine removes this guesswork entirely by sending a single, precisely-timed 'Leave Now' notification, calculated the same way a ride-hailing app times a 'your driver is arriving' alert.
+How It Works - Step by Step
+1. On the check-in screen, the patient sees an optional toggle: 'Notify me exactly when to leave.' This is off by default and requires explicit opt-in (privacy-first design).
+2. If enabled, the Flutter Patient app requests one-time location permission and begins sending the patient's coordinates to Firestore at a low frequency (every 60-90 seconds) using the geolocator package - only while their token status is 'waiting'.
+3. A Cloud Function (computeLeaveNow) is triggered on every location update and every queue-position change for that token.
+4. The function calls the Google Maps Directions API with the patient's current coordinates and the hospital's fixed coordinates, requesting a traffic-aware driving/transit duration (travelTimeMinutes).
+5. The function compares travelTimeMinutes against the patient's current estimatedWaitMinutes (calculated the same way as in Section 7.2, via the doctor's rolling average consultation time).
+6. The moment travelTimeMinutes is greater than or equal to (estimatedWaitMinutes - a small safety buffer, e.g. 5 minutes), the function sends exactly one 'Leave Now' push notification via FCM and sets leaveNowSentAt so the same alert is never sent twice.
+7. If the patient's queue position suddenly jumps forward (e.g., several patients ahead are marked no-show), the function recalculates immediately and can still fire the alert early, rather than waiting for the next scheduled check.
+Logic Pseudocode
+exports.computeLeaveNow = functions.firestore  .document('doctors/{doctorId}/tokens/{tokenId}')  .onUpdate(async (change, context) => {    const after = change.after.data();    // opt-in only, one-time alert    if (!after.travelTrackingEnabled || after.leaveNowSentAt) return;    if (after.status !== 'waiting' || !after.patientLocation) return;    // same estimation logic as Section 7.2    const estimatedWaitMinutes = await computeEstimatedWait(after);    const travelTimeMinutes = await getMapsTravelTime(      after.patientLocation, HOSPITAL_COORDS    );    const BUFFER_MINUTES = 5;    if (travelTimeMinutes >= (estimatedWaitMinutes - BUFFER_MINUTES)) {      await sendNotification(        after.deviceToken,        `Leave now - about a ${travelTimeMinutes} min ride, turn is close.`      );      await change.after.ref.update({        leaveNowSentAt: admin.firestore.FieldValue.serverTimestamp()      });    }  });
+Why This Is Genuinely Hard to Copy Quickly
+It requires wiring three live signals together (patient GPS, live traffic data, and live queue ETA) into a single recomputation loop - most competitor products only track one of these (queue ETA).
+It needs a working rolling-average wait-time model (Section 7.2) as an input, so it only works well once the base queue system is already solid - it is a natural 'advanced feature to demo last' in the hackathon.
+Because it degrades gracefully (patients who opt out just see the normal queue status), it adds a wow-factor demo moment without risking the core reliability of the app.
+Privacy & Data Handling
+Location sharing is strictly opt-in per visit, never enabled by default.
+Location data is only stored on the token document for the duration of that single visit and is never shown to reception, doctors, or admins - it is used only by the Cloud Function for the travel-time calculation.
+Location updates stop automatically the moment the token's status changes away from 'waiting' (called, completed, or skipped).
+Demo Script for This Feature
+"Every OPD app in the market tells you your position in line. Ours goes further - it knows how far you are from the hospital in real traffic, and tells you the exact moment to leave, the same way a cab app tells you when your ride is arriving. That's the one feature none of the existing hospital queue products on the market currently offer."
+7.10 Feature: Auto Pharmacy Token Handoff
+Every competitor product reviewed for this PRD (Section 1) manages only the doctor-consultation queue. In practice, an OPD visit does not end when the doctor consultation ends - the patient still has to queue a second time at the pharmacy counter to collect medicines, with zero visibility into that second wait. This feature closes that second gap by automatically continuing the patient's digital journey past the doctor's door.
+How It Works
+1. When a doctor marks a token 'Complete' on the Doctor Flutter app, an optional field appears: 'Prescribed medicines (comma-separated)' and a checkbox 'Send to Pharmacy'.
+2. If checked, a Cloud Function (createPharmacyToken) automatically generates a new token in the hospital's pharmacyCounters queue, using the exact same generateToken() transaction logic from Section 7.1 - just pointed at a different queue.
+3. The new pharmacy token stores a linkedDoctorTokenId field, so the full visit (registration to doctor to pharmacy) can be traced as one continuous journey.
+4. The Patient Flutter app automatically navigates from the (now completed) doctor status screen to a new pharmacy status screen, showing the new token number and estimated pharmacy wait time - with zero extra action needed from the patient.
+5. Pharmacy counter staff use the same Reception/Doctor-style 'Call Next' control (React panel), so no new UI pattern has to be designed - it reuses Section 7.4's Call Next logic against the pharmacyCounters collection instead of doctors.
+Patient App: 'My Journey' Timeline
+Rather than showing the patient two disconnected token screens, the Patient app displays a single horizontal timeline: Registration -> Doctor Consultation -> Pharmacy -> Done, with the current step highlighted - similar in spirit to a food-delivery order tracker. This reframes the whole hospital visit as one tracked journey rather than a series of separate, disconnected waits.
+New Admin KPI This Enables
+Because the doctor token and pharmacy token are linked, the Admin Analytics dashboard (Section 7.7) can now report a genuinely new metric: Total Time in Hospital (registration to medicine collection), not just doctor-wait time. This is a more meaningful operational number for hospital administrators than doctor-wait-time alone.
+7.11 Feature: Pharmacy Price & Distance Comparison
+This feature extends the pharmacy handoff above with a second differentiator: once medicines are prescribed, the patient is not limited to the hospital's own pharmacy. The app shows a side-by-side comparison of the hospital pharmacy against nearby external pharmacies, ranked by price and by distance - similar in spirit to how a patient might compare prices on a medicine-delivery app, but tied directly into the OPD visit.
+How It Works
+1. The medicine names entered by the doctor in Section 7.10 are matched against a medicinePrices Firestore collection, which stores a per-pharmacy price list. For the hackathon demo this is a small, manually-populated mock catalog (3-4 sample pharmacies) rather than a live pricing feed.
+2. For each pharmacy in the catalog, the total cost of the full prescription is computed by summing the price of each prescribed medicine.
+3. The Google Places API (Nearby Search) is used to find real pharmacies close to the patient's current location, and the same Google Maps Directions API already integrated for the Smart Leave-Now Engine (Section 7.9) computes the live distance and travel time to each one - no new external integration is required beyond what Section 7.9 already sets up.
+4. The hospital's own pharmacy is always included in the comparison, typically appearing as the fastest option since the patient is already on-site.
+5. Results are shown in a simple comparison table (Pharmacy, Distance, Total Price, Stock Status), with 'Cheapest' and 'Nearest' badges highlighted so the patient can decide in a glance.
+6. Tapping 'Send to Pharmacy' on the hospital's own pharmacy triggers the Section 7.10 auto-token-handoff flow; tapping it on an external pharmacy simply opens turn-by-turn directions, since the hospital system has no control over an external pharmacy's queue.
+Honesty Note for the Demo
+  The price data in this feature is intentionally a small mock catalog for the hackathon demo - a real production version would need a partnership or public API for live medicine pricing, which does not exist as an open dataset in India today. The distance and travel-time portion of this feature, however, is fully real, since it reuses the already-integrated Google Maps Directions API. Judges should be told plainly that pricing is simulated while location is live - this transparency is itself a credibility signal.
+Why This Combination (7.10 + 7.11) Is a Strong Differentiator
+It extends the product's scope beyond the doctor's door to the patient's entire hospital visit, which no reviewed competitor product does end-to-end.
+It reuses two pieces of infrastructure already built for other features (the token-generation transaction from Section 7.1, and the Google Maps integration from Section 7.9), so the incremental hackathon build cost is low relative to the story it tells.
+It gives the demo a natural closing beat: check in -> get called -> get medicine -> done, told as one continuous, trackable journey.
+
+8. Non-Functional Requirements
+Category
+Requirement
+Performance
+Queue status updates must reflect on all connected screens within 1-2 seconds of a change (native to Firestore's real-time listeners).
+Scalability
+System should comfortably support 5 doctors x 100 tokens/day each on Firebase's free Spark plan for demo purposes.
+Availability
+Firebase Hosting + Firestore provide managed high availability; no custom server uptime to manage.
+Usability
+Patient check-in flow should be completable in under 60 seconds in the Flutter app; first-time install kept to a single QR-scan-to-store-link flow.
+Security
+Firestore Security Rules must prevent any client from writing to fields outside their role's permission (see Section 11).
+Accessibility
+Large, high-contrast text on the public waiting-room display for readability from a distance.
+Portability
+Flutter apps run on both Android and iOS from one codebase; the React Admin/Reception panel is fully responsive and works on any modern desktop browser without installation.
+
+9. System Architecture
+9.1 High-Level Architecture
+The system is split into three client applications, all connected to a single shared Firebase backend. This is a standard multi-client architecture: one backend, multiple front ends tailored to how each user actually works.
+App
+Platform
+Used By
+Patient App
+Flutter (Android + iOS from one codebase)
+Patients - check-in, live token status, notifications
+Doctor App
+Flutter (Android + iOS from one codebase)
+Doctors - Call Next / Complete / Skip / Pause, on a phone or tablet at the consultation desk
+Admin/Reception Panel
+React (Web, deployed via Firebase Hosting)
+Reception staff - manage queue, add walk-ins; Admins - analytics; also renders the Public Waiting-Room Display
+All three apps talk to the exact same Firestore database and the same Cloud Functions - there is only one backend to build and maintain. This is the key advantage of Firebase in a multi-platform hackathon build: the token generation logic, security rules, and notification triggers described in this document are written once and are automatically consistent no matter which app (Flutter or React) is reading or writing the data.
+9.2 Why Flutter for Patient + Doctor, React for Admin/Reception
+App
+Why This Platform
+Patient App (Flutter)
+Patients interact from their personal phone; Flutter gives a native, app-store-installable experience with reliable FCM push notifications, smooth animations for the live queue counter, and QR-scan-to-open deep linking.
+Doctor App (Flutter)
+Doctors use one dedicated device (phone/tablet) at their desk; a native app feels more always-on and reliable for a single repeated action (Call Next) than a browser tab that might get closed.
+Admin/Reception Panel (React)
+Reception and Admin work from a desktop/laptop at a fixed counter; a web app needs no installation, is easy to open on any browser, and is better suited to dense tables, filters, search, and charts than a mobile screen.
+9.3 Data Flow (Textual Diagram)
+  [Patient Flutter App]         [Reception/Admin - React]       [Doctor Flutter App]         |                                  |                          |         |  1. Submit check-in form         |                          |         v                                  |                          |  [Firestore Transaction: generateToken] ---+                          |         |                                                             |         |  2. onSnapshot() live listener (Firestore SDK)               |         v                                                             v  [Cloud Firestore: doctors/{id}/tokens/{tokenId}] <----- 3. Call Next / Complete / Skip         |                                                    (Firestore SDK - Flutter)         |  4. onUpdate trigger         v  [Cloud Function: sendNotification] ---> [Firebase Cloud Messaging] ---> [Patient Flutter App]
+9.4 Why Firebase Fits This Problem Well
+Real-time by default: Firestore's onSnapshot() (identical in the Flutter SDK and the JS/React SDK) removes the need to build custom WebSocket/polling infrastructure.
+One backend, three front ends: the cloud_firestore and firebase_auth Flutter packages and the Firebase JS SDK for React talk to the same collections, so business logic is written once.
+No backend server to deploy or scale during the hackathon - Cloud Functions handle the few pieces of logic that must run server-side.
+Built-in authentication with role support, shared across Flutter and React apps via the same users collection.
+Generous free tier (Spark plan) is sufficient for a hackathon demo's expected traffic.
+Firebase Hosting gives an instant, shareable HTTPS demo URL for the React Admin/Reception panel; Flutter apps can be run via emulator or a debug APK link for judges.
+
+10. Firestore Data Model (Schema)
+Firestore is a NoSQL, document-oriented database. The schema below is organized as collections and sub-collections rather than relational tables.
+10.1 Collection: doctors
+doctors (collection)  └── {doctorId} (document)        name: string              e.g. 'Dr. Mehta'        department: string        e.g. 'General Medicine'        avgConsultationMinutes: number   (rolling average, auto-updated)        queuePaused: boolean        activeQueueDate: string   e.g. '2026-09-10'        counters (sub-collection)           └── {dateKey} → { lastToken: number }        tokens (sub-collection)           └── {tokenId} → see schema below
+10.2 Sub-collection: tokens
+Field
+Type
+Description
+tokenNumber
+number
+Sequential number for the day, per doctor
+patientName
+string
+Patient's full name
+phoneNumber
+string
+Used for notification targeting
+reason
+string (optional)
+Free-text reason for visit
+status
+string
+waiting | in-progress | completed | skipped
+date
+string
+Date key, e.g. '2026-09-10', used for daily reset logic
+createdAt
+timestamp
+Server timestamp at check-in
+calledAt
+timestamp (nullable)
+Set when doctor calls this token
+completedAt
+timestamp (nullable)
+Set when consultation is marked complete
+deviceToken
+string (nullable)
+FCM token for push notification delivery
+addedBy
+string
+'self' or the staff UID who added it manually
+travelTrackingEnabled
+boolean
+True only if the patient opted in to the Smart Leave-Now Engine (Section 7.9)
+patientLocation
+geopoint (nullable)
+Patient's last known coordinates, only present while travelTrackingEnabled and status is 'waiting'
+leaveNowSentAt
+timestamp (nullable)
+Set once the Leave-Now notification has fired, to prevent duplicate alerts
+prescribedMedicines
+array of strings (nullable)
+Medicine names entered by the doctor at consultation-complete time (Section 7.10)
+sentToPharmacy
+boolean
+True if the doctor triggered the auto pharmacy-token handoff for this visit
+10.3 Collection: pharmacyCounters (Section 7.10)
+pharmacyCounters (collection)  └── {pharmacyId} (document)      e.g. 'main-pharmacy'        name: string                e.g. 'Hospital Main Pharmacy'        counters (sub-collection)   -- same pattern as doctors/counters           └── {dateKey} → { lastToken: number }        tokens (sub-collection)           └── {tokenId} (document)                 tokenNumber: number                 patientName: string                 phoneNumber: string                 linkedDoctorTokenId: string   -- traces back to the doctor visit                 status: string       'waiting' | 'in-progress' | 'completed'                 date: string                 createdAt: timestamp
+This collection deliberately mirrors the doctors/{doctorId}/tokens structure from Section 10.2, so the same Call Next / Complete logic from Section 7.4 can be reused for pharmacy counter staff with no new code pattern.
+10.4 Collection: medicinePrices (Section 7.11 - mock catalog)
+medicinePrices (collection)  └── {pharmacyId} (document)      e.g. 'apollo-nearby-1'        pharmacyName: string        isHospitalPharmacy: boolean        medicines (map)             -- mock price catalog for the demo           'Paracetamol 500mg': 12           'Amoxicillin 250mg': 45           'Cetirizine 10mg': 8
+This is a small, manually seeded demo dataset (3-4 pharmacy documents) used to compute a total prescription cost per pharmacy for the comparison screen in Section 7.11. It is explicitly not a live pricing feed - see the Honesty Note in Section 7.11.
+10.5 Collection: users (staff only)
+users (collection)  └── {uid} (document)  -- matches Firebase Auth UID        name: string        role: string          'receptionist' | 'doctor' | 'admin' | 'pharmacy_staff'        doctorId: string      (only present if role == 'doctor')        createdAt: timestamp
+10.6 Collection: dailyStats (for Admin Analytics)
+dailyStats (collection)  └── {doctorId}_{dateKey} (document)        totalServed: number        totalSkipped: number        avgWaitMinutes: number        avgConsultationMinutes: number        peakHour: number  (0-23)        avgTotalVisitMinutes: number   -- registration to pharmacy completion (Section 7.10)
+This document is updated incrementally by a Cloud Function every time a token's status changes to 'completed' or 'skipped', rather than being computed on-demand by scanning the full tokens collection. This keeps the Admin Analytics dashboard fast even as the number of tokens grows.
+
+11. Firestore Security Rules
+Security rules are the actual enforcement layer - they run on Firebase's servers and cannot be bypassed by a modified client, unlike UI-level restrictions. Below is the rule set for this system.
+rules_version = '2';service cloud.firestore {  match /databases/{database}/documents {    function isSignedIn() { return request.auth != null; }    function getRole() {      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;    }    match /doctors/{doctorId} {      allow read: if true; // public can view doctor list + queuePaused status      allow write: if isSignedIn() && getRole() == 'admin';      match /tokens/{tokenId} {        allow read: if true; // patients + public display need read access        allow create: if true; // patient self check-in, no auth required        allow update: if isSignedIn() &&                         (getRole() == 'receptionist' || getRole() == 'doctor');        allow delete: if isSignedIn() && getRole() == 'admin';      }      match /counters/{dateKey} {        allow read: if true;        allow write: if true; // guarded by transaction logic, not by auth      }    }    match /pharmacyCounters/{pharmacyId} {      allow read: if true;      allow write: if isSignedIn() && getRole() == 'admin';      match /tokens/{tokenId} {        allow read: if true;        allow create: if true; // created by createPharmacyToken Cloud Function or self        allow update: if isSignedIn() &&                         (getRole() == 'pharmacy_staff' || getRole() == 'receptionist');      }      match /counters/{dateKey} {        allow read: if true;        allow write: if true;      }    }    match /medicinePrices/{pharmacyId} {      allow read: if true; // needed by patient app for price comparison      allow write: if isSignedIn() && getRole() == 'admin';    }    match /users/{userId} {      allow read: if isSignedIn() && request.auth.uid == userId;      allow write: if isSignedIn() && getRole() == 'admin';    }    match /dailyStats/{statId} {      allow read: if isSignedIn() && getRole() == 'admin';      allow write: if false; // only Cloud Functions (admin SDK) can write    }  }}
+Note on token creation being unauthenticated: this is an intentional product decision to keep patient check-in frictionless (no account required). The trade-off is documented here so it can be explained confidently to judges - abuse risk is low in a hackathon demo context, and a production version would add App Check or rate-limiting via Cloud Functions to prevent spam token creation.
+
+12. Cloud Functions Specification
+Function Name
+Trigger Type
+Purpose
+onTokenStatusChange
+Firestore onUpdate (tokens/{tokenId})
+Detects status changes and position changes; sends FCM notifications at the right milestones.
+onTokenCompleted
+Firestore onUpdate (tokens/{tokenId}) where status becomes 'completed'
+Updates the doctor's rolling average consultation time and increments dailyStats.totalServed.
+resetDailyQueue
+Scheduled (Cloud Scheduler, runs at 12:00 AM daily)
+Archives yesterday's tokens, resets each doctor's counter for the new day.
+computeDailyStats
+Scheduled (runs every 30 minutes during operating hours)
+Recomputes avgWaitMinutes and peakHour for the Admin dashboard.
+addWalkInPatient
+Callable Function (invoked from Reception dashboard)
+Server-side validated version of generateToken(), used for manual entries to keep validation centralized.
+computeLeaveNow
+Firestore onUpdate (tokens/{tokenId}), triggered on location or queue-position change
+Signature feature (Section 7.9): compares live travel time (Google Maps Directions API) against live queue ETA and fires a one-time 'Leave Now' push notification.
+createPharmacyToken
+Firestore onUpdate (tokens/{tokenId}) where sentToPharmacy becomes true
+Section 7.10: reuses the generateToken() transaction logic to auto-issue a linked token in pharmacyCounters when a doctor completes a consultation with 'Send to Pharmacy' checked.
+computePharmacyComparison
+Callable Function, invoked from the Patient app once prescribedMedicines is set
+Section 7.11: matches prescribedMedicines against the medicinePrices catalog, calls Google Places + Directions APIs for nearby pharmacies, and returns a ranked comparison list to the app.
+Using Cloud Functions for the notification and stats logic (rather than doing it client-side) ensures this logic runs reliably exactly once per event, regardless of whether any particular staff member's browser tab happens to be open at the time.
+
+13. UI / UX Screen Specifications
+13.1 Patient Check-In Screen  (Flutter - Patient App)
+Single-column mobile-first form: Name, Phone, Department/Doctor dropdown, optional reason.
+One large primary button: 'Get My Token'.
+Minimal branding header showing hospital/clinic name.
+13.2 Patient Live Status Screen  (Flutter - Patient App)
+Large token number at the top (e.g., 'Your Token: #24').
+Current 'Now Serving' number directly below, for quick visual comparison.
+Progress indicator: 'X patients ahead of you'.
+Estimated wait time in minutes, updating live.
+Status badge with color coding: Grey (Waiting), Amber (You're Next), Green (In Progress), Blue (Completed), Red (Skipped).
+13.3 Reception Dashboard  (React - Admin/Reception Panel)
+Left panel: list of doctors with a live waiting-count badge per doctor.
+Main panel: full queue table for the selected doctor (Token #, Name, Phone, Status, Actions).
+Top-right: 'Add Walk-in Patient' button opening a quick-entry modal.
+Search bar to find a patient instantly by name, phone, or token number.
+13.4 Doctor Dashboard  (Flutter - Doctor App)
+Extremely minimal: current in-progress token shown huge, with three buttons - Call Next, Mark Complete, Skip.
+Small secondary text showing how many patients remain in queue.
+A 'Pause Queue' toggle for breaks.
+13.5 Public Waiting-Room Display  (React - runs on a browser/TV)
+Grid layout - one column per doctor/department.
+Each column shows 'Now Serving: #X' in very large font, with the next 3 tokens listed below in smaller font.
+Auto-cycles department focus every 10 seconds if more doctors than fit on one screen.
+13.6 Admin Analytics Dashboard  (React - Admin/Reception Panel)
+Summary cards: Total Served Today, Average Wait Time, No-Show Rate.
+Bar chart: Check-ins by hour of day (identifies peak congestion windows).
+Table: per-doctor breakdown of served count and average consultation time.
+
+14. Edge Cases & Error Handling
+Scenario
+Handling Strategy
+Two patients check in at the exact same moment
+Firestore transaction on the counter document guarantees sequential, non-duplicate token numbers.
+Patient uninstalls/reinstalls the app or switches devices
+Reception can look up the patient by phone number on the Admin panel and re-display or reissue the token status.
+Doctor calls 'Next' but queue is empty
+UI shows 'No patients waiting' and disables the button until a new token is created.
+Patient never shows up when called
+Doctor or reception marks token as 'Skipped' after a configurable grace period (e.g., 3 minutes), and the queue auto-advances.
+Network disconnects on a patient's phone mid-session
+Firestore's offline persistence caches the last known state locally and auto-syncs once connectivity returns.
+A doctor's queue needs to be paused (emergency, break)
+queuePaused flag halts new 'Call Next' actions; all patient screens display a delay banner rather than a false ETA.
+Push notification permission denied on patient's device
+System falls back to an in-app banner on the Live Status screen; patient can still see live status any time they open the app.
+Receptionist accidentally adds a patient to the wrong doctor
+Reception dashboard supports a 'Reassign Doctor' action that transfers the token to a new queue with a fresh token number.
+Midnight rollover while patients are still waiting
+resetDailyQueue Cloud Function only archives tokens with status 'completed' or 'skipped'; any still-waiting tokens are carried over rather than deleted.
+
+15. Technology Stack
+15.1 Patient App
+Layer
+Technology
+Reason
+Framework
+Flutter (Dart)
+Single codebase compiles to both Android and iOS; fast hot-reload dev cycle suited to hackathon speed.
+Firebase Integration
+firebase_core, cloud_firestore, firebase_auth, firebase_messaging (FlutterFire packages)
+Official, well-documented Flutter plugins for every Firebase service used in this PRD.
+State Management
+Provider or Riverpod
+Lightweight, minimal boilerplate - appropriate for a small hackathon app.
+QR Deep Link
+app_links / uni_links package
+Opens the app directly to the check-in screen when the entrance QR code is scanned.
+Location (Signature Feature)
+geolocator package + Google Maps Directions & Places APIs
+Powers the Smart Leave-Now Engine (Section 7.9) and the Pharmacy Price & Distance Comparison (Section 7.11) - captures opt-in patient location and computes live travel time plus nearby pharmacy search.
+15.2 Doctor App
+Layer
+Technology
+Reason
+Framework
+Flutter (Dart)
+Shares the same project structure and Firebase setup as the Patient app - fast to build as the second app.
+Firebase Integration
+cloud_firestore, firebase_auth (FlutterFire)
+Same shared Firestore collections; role checked via the users collection on login.
+UI Focus
+Single-screen, large-button layout
+Minimal taps needed mid-consultation: Call Next / Complete / Skip / Pause.
+15.3 Admin / Reception Panel
+Layer
+Technology
+Reason
+Framework
+React + Tailwind CSS
+Fast to build data-dense tables/dashboards; large hackathon-proven ecosystem.
+Firebase Integration
+Firebase JS SDK (firebase/firestore, firebase/auth)
+Same Firestore project as both Flutter apps - no separate backend.
+Charts (Analytics)
+Chart.js or Recharts
+Lightweight charting for the Admin dashboard's hourly check-in and wait-time charts.
+Hosting
+Firebase Hosting
+One-command deploy with a free HTTPS URL, ideal for a hackathon demo link for judges.
+15.4 Shared Backend (All Three Apps)
+Layer
+Technology
+Reason
+Database
+Cloud Firestore
+Real-time listeners remove the need for custom WebSocket infra, available natively in both FlutterFire and the JS SDK.
+Authentication
+Firebase Authentication
+Shared email/password login for staff (Doctor, Receptionist, Admin) across Flutter and React; anonymous auth for patients.
+Server Logic
+Cloud Functions (Node.js)
+Handles notifications, scheduled daily reset, and stats aggregation securely, regardless of which client triggered the event.
+Notifications
+Firebase Cloud Messaging (FCM)
+Delivers native push notifications to the Flutter Patient app via firebase_messaging.
+External API (Signature Feature)
+Google Maps Directions API + Google Places API
+Called from computeLeaveNow and computePharmacyComparison Cloud Functions for live travel time and nearby-pharmacy search (Sections 7.9 and 7.11).
+
+16. Development Roadmap (Hackathon Timeline)
+The build is sequenced so that a working, demoable core (check-in → live status → call next) exists as early as possible, with polish and secondary features layered on afterward. This is important in a hackathon: a simple working demo beats an ambitious broken one.
+Because there are now three separate codebases (Patient Flutter app, Doctor Flutter app, React Admin/Reception panel), the ideal hackathon setup is to split the team into parallel tracks once the shared Firebase schema and rules are finalized in Hour 0-2. All three tracks build against the same Firestore project simultaneously.
+16.1 Suggested 24-Hour Breakdown
+Time Block
+Shared / Team Track
+Milestone
+Hour 0 - 2
+Whole Team (shared)
+Firebase project setup, Firestore schema creation, Security Rules v1, Auth setup - this must finish before parallel work starts.
+Hour 2 - 10
+Track A: Patient Flutter App
+Check-in screen + generateToken() call, live status screen with onSnapshot listener + position calculation, FCM setup.
+Hour 2 - 8
+Track B: Doctor Flutter App
+Login screen, Call Next / Complete / Skip / Pause screen wired to Firestore.
+Hour 2 - 12
+Track C: React Admin/Reception Panel
+Reception queue view, add-walk-in modal, search, Doctor login-gated views, Public Waiting-Room display screen.
+Hour 10 - 14
+Whole Team (shared)
+Cloud Functions: notification triggers, rolling average consultation time, daily reset.
+Hour 12 - 18
+Track C continued
+Admin Analytics dashboard with summary cards and chart.
+Hour 14 - 20
+Track A + B
+Polish Flutter UI, test notifications end-to-end on real devices.
+Hour 20 - 22
+Whole Team
+Integration testing across all three apps against the same live Firestore project.
+Hour 22 - 24
+Whole Team
+Firestore Security Rules hardening, deploy React panel to Firebase Hosting, build debug APKs for both Flutter apps, prepare demo script.
+16.2 Minimum Viable Demo (if time runs short)
+If time is constrained, the absolute minimum that still tells a complete, compelling story is: Patient Flutter app Check-In + Live Status screen, plus the Doctor Flutter app's 'Call Next' button, demoed on two physical phones side by side to show real-time sync. The React Admin panel, notifications, and public display are additive polish that can be shown as screenshots or a secondary screen if the full build is not finished.
+
+17. Success Metrics / KPIs
+Metric
+Target (Demo Context)
+Real-time update latency
+Under 2 seconds between a staff action and patient screen update.
+Check-in completion time
+Under 60 seconds from scan to receiving a token.
+Demo reliability
+Zero crashes across a full 5-minute live demo walkthrough.
+Judge comprehension
+A judge unfamiliar with the problem should understand the value within 30 seconds of seeing the live-sync demo.
+18. Future Enhancements (Post-Hackathon)
+Real SMS gateway integration (Twilio / MSG91) instead of simulated notifications.
+Multi-branch / multi-hospital support with a super-admin layer.
+Integration with an actual Hospital Information System (HIS) for patient history.
+Appointment pre-booking that merges with the walk-in queue using a hybrid priority algorithm.
+Native mobile app using the same Firebase backend (Firestore SDKs support Android/iOS natively).
+Firebase App Check to prevent automated abuse of the anonymous check-in endpoint.
+
+19. Appendix
+19.1 Glossary
+Term
+Meaning
+OPD
+Out-Patient Department - hospital department handling patients who do not require overnight admission.
+Token
+A digital or physical number assigned to a patient marking their position in the queue.
+Firestore
+Firebase's real-time NoSQL document database.
+onSnapshot
+A Firestore listener method that pushes live data updates to a client without polling.
+Cloud Function
+A server-side function that runs in response to a Firestore event or a schedule, without managing a server.
+FCM
+Firebase Cloud Messaging - Firebase's push notification service.
+19.2 Explaining This Project to Judges - Suggested Script
+"Hospitals still manage OPD queues with paper tokens and physical lines. Our system lets a patient check in from their phone, see their live position and estimated wait time - just like tracking a food delivery - and walk in only when their turn is close. On the backend, we use Firebase Firestore's real-time database so that the moment a doctor clicks 'Next Patient', every connected screen - the patient's phone, the reception dashboard, and the waiting-room display - updates instantly with zero refresh. We used Firebase specifically because it gave us real-time sync, authentication, and hosting without needing to build or deploy a custom backend server, which let us focus our hackathon time on the actual user experience."
+19.3 References for Data Model Decisions
+Firestore was chosen over a relational database because the core requirement - many simultaneous clients needing live, low-latency updates to a shared queue state - is precisely the use case Firestore's snapshot listeners are designed for. A traditional SQL database would have required a separately built WebSocket or polling layer to achieve the same real-time effect.
