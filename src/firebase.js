@@ -1061,7 +1061,63 @@ export async function createPharmacyToken(data) {
  */
 export function subscribePharmacyTokens(callback) {
   const colRef = collection(db, 'pharmacy_tokens');
-  return onSnapshot(colRef, (snap) => {
+  return onSnapshot(colRef, async (snap) => {
+    if (snap.empty) {
+      // Auto-seed initial interactive tokens so buttons work immediately
+      const initialTokens = [
+        {
+          id: 'ph-demo-1',
+          tokenNumber: 1,
+          tokenCode: 'PH-01',
+          prefix: 'PH',
+          patientName: 'Riya Sharma',
+          phoneNumber: '9876543210',
+          doctorId: 'dr-mehta',
+          doctorName: 'Dr. Rajesh Mehta',
+          medicines: ['Paracetamol 650mg', 'Azithromycin 500mg'],
+          hospitalId: 'citycare-central',
+          hospitalName: 'CityCare Central Hospital',
+          pharmacyId: 'pharm-hospital',
+          pharmacyName: 'CityCare In-House Pharmacy',
+          status: 'preparing',
+          counterNumber: 'Counter 1',
+          isAutoPacked: false,
+          totalEstimatedPrice: 120,
+          date: getTodayDateKey(),
+          createdAt: new Date()
+        },
+        {
+          id: 'ph-demo-2',
+          tokenNumber: 2,
+          tokenCode: 'JA-01',
+          prefix: 'JA',
+          patientName: 'Amit Verma',
+          phoneNumber: '9812345678',
+          doctorId: 'dr-verma',
+          doctorName: 'Dr. Vivek Verma',
+          medicines: ['Pantoprazole 40mg', 'Domperidone'],
+          hospitalId: 'citycare-central',
+          hospitalName: 'CityCare Central Hospital',
+          pharmacyId: 'pharm-janaushadhi',
+          pharmacyName: 'Pradhan Mantri Jan Aushadhi Kendra',
+          status: 'ready',
+          counterNumber: 'Counter 1 (Pickup Ready)',
+          isAutoPacked: true,
+          totalEstimatedPrice: 36,
+          date: getTodayDateKey(),
+          createdAt: new Date()
+        }
+      ];
+
+      for (const t of initialTokens) {
+        try {
+          await setDoc(doc(db, 'pharmacy_tokens', t.id), t, { merge: true });
+        } catch (e) {}
+      }
+      callback(initialTokens);
+      return;
+    }
+
     const list = [];
     snap.forEach(docSnap => {
       list.push({ id: docSnap.id, ...docSnap.data() });
@@ -1073,10 +1129,10 @@ export function subscribePharmacyTokens(callback) {
     });
     callback(list);
   }, (err) => {
-    console.warn('subscribePharmacyTokens error:', err);
+    console.warn('subscribePharmacyTokens fallback:', err);
     callback([
-      { id: 'ph-demo-1', tokenCode: 'PH-01', patientName: 'Riya Sharma', pharmacyName: 'CityCare In-House Pharmacy', medicines: ['Paracetamol 650mg', 'Azithromycin 500mg'], status: 'ready', counterNumber: 'Counter 1' },
-      { id: 'ph-demo-2', tokenCode: 'JA-01', patientName: 'Amit Verma', pharmacyName: 'Pradhan Mantri Jan Aushadhi Kendra', medicines: ['Pantoprazole 40mg', 'Domperidone'], status: 'ready', counterNumber: 'Counter 2' }
+      { id: 'ph-demo-1', tokenCode: 'PH-01', patientName: 'Riya Sharma', pharmacyName: 'CityCare In-House Pharmacy', medicines: ['Paracetamol 650mg', 'Azithromycin 500mg'], status: 'preparing', counterNumber: 'Counter 1', totalEstimatedPrice: 120 },
+      { id: 'ph-demo-2', tokenCode: 'JA-01', patientName: 'Amit Verma', pharmacyName: 'Pradhan Mantri Jan Aushadhi Kendra', medicines: ['Pantoprazole 40mg', 'Domperidone'], status: 'ready', counterNumber: 'Counter 1', isAutoPacked: true, totalEstimatedPrice: 36 }
     ]);
   });
 }
@@ -1086,11 +1142,11 @@ export function subscribePharmacyTokens(callback) {
  */
 export async function updatePharmacyTokenStatus(tokenId, status, counterNumber = 'Counter 1') {
   const docRef = doc(db, 'pharmacy_tokens', tokenId);
-  return await updateDoc(docRef, {
+  return await setDoc(docRef, {
     status,
     counterNumber,
     updatedAt: serverTimestamp()
-  });
+  }, { merge: true });
 }
 
 /**

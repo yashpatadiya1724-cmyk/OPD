@@ -92,6 +92,8 @@ export default function PharmacyConsole() {
     try {
       setIsProcessing(true);
       playChime();
+      // Optimistic UI state update
+      setTokens(prev => prev.map(t => t.id === token.id ? { ...t, status: 'ready', counterNumber: selectedCounter } : t));
       await updatePharmacyTokenStatus(token.id, 'ready', selectedCounter);
     } catch (err) {
       console.error('Error updating pharmacy token:', err);
@@ -103,6 +105,8 @@ export default function PharmacyConsole() {
   const handleMarkDispensed = async (token) => {
     try {
       setIsProcessing(true);
+      // Optimistic UI state update
+      setTokens(prev => prev.map(t => t.id === token.id ? { ...t, status: 'dispensed', counterNumber: selectedCounter } : t));
       await updatePharmacyTokenStatus(token.id, 'dispensed', selectedCounter);
     } catch (err) {
       console.error('Error dispensing pharmacy token:', err);

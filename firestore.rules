@@ -5,14 +5,10 @@ service cloud.firestore {
 
     // Doctors collection and sub-collections
     match /doctors/{doctorId} {
-      // Public read; write allowed for staff / hackathon demo mode
       allow read, write: if true;
 
       // Tokens sub-collection
       match /tokens/{tokenId} {
-        // Anyone can read tokens (patients & public TV display)
-        // Patient self check-in creates tokens without login
-        // Staff and doctors update status (Call Next, Complete, Skip)
         allow read, write: if true;
       }
 
@@ -22,10 +18,18 @@ service cloud.firestore {
       }
     }
 
-    // Staff accounts
+    // Pharmacy tokens & counters (Section 7.10 & 7.11)
+    match /pharmacy_tokens/{tokenId} {
+      allow read, write: if true;
+    }
+
+    match /pharmacyCounters/{counterId} {
+      allow read, write: if true;
+    }
+
+    // Staff & Patient User accounts
     match /users/{userId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
 
     // Daily statistics for Admin analytics
@@ -50,6 +54,11 @@ service cloud.firestore {
 
     // OPD Visit History
     match /history/{historyId} {
+      allow read, write: if true;
+    }
+
+    // Catch-all fallback for open clinical demo ecosystem
+    match /{document=**} {
       allow read, write: if true;
     }
   }
