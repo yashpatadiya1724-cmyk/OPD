@@ -5,6 +5,7 @@ import {
   collection, 
   setDoc, 
   updateDoc, 
+  deleteDoc,
   runTransaction, 
   onSnapshot, 
   serverTimestamp,
@@ -159,6 +160,87 @@ export function subscribeHospitals(callback) {
     const hospitals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     callback(hospitals);
   });
+}
+
+/**
+ * Hospital Onboarding & Facility Management (SuperAdmin / Hospital Admin)
+ */
+export async function onboardHospital(hospitalData) {
+  const hospId = hospitalData.id || `hosp-${Date.now()}`;
+  const docRef = doc(db, 'hospitals', hospId);
+  const payload = {
+    id: hospId,
+    name: hospitalData.name,
+    tagline: hospitalData.tagline || 'Leading Multi-Speciality Healthcare & Research Facility',
+    address: hospitalData.address || 'Sector 14, Ring Road, New Delhi',
+    city: hospitalData.city || 'New Delhi',
+    rating: Number(hospitalData.rating) || 4.8,
+    reviewsCount: Number(hospitalData.reviewsCount) || 150,
+    distance: hospitalData.distance || '1.5 km',
+    specialties: Array.isArray(hospitalData.specialties) 
+      ? hospitalData.specialties 
+      : (typeof hospitalData.specialties === 'string' ? hospitalData.specialties.split(',').map(s => s.trim()).filter(Boolean) : ['General Medicine', 'Pediatrics']),
+    avgWaitMinutes: Number(hospitalData.avgWaitMinutes) || 12,
+    activeDoctorsCount: Number(hospitalData.activeDoctorsCount) || 0,
+    openNow: hospitalData.openNow !== undefined ? hospitalData.openNow : true,
+    timing: hospitalData.timing || '24x7 Emergency | OPD: 8:00 AM - 6:00 PM',
+    features: Array.isArray(hospitalData.features)
+      ? hospitalData.features
+      : (typeof hospitalData.features === 'string' ? hospitalData.features.split(',').map(f => f.trim()).filter(Boolean) : ['Live Token Tracker', 'Digital Prescription', 'Express Pharmacy']),
+    image: hospitalData.image || 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80',
+    contactPhone: hospitalData.contactPhone || '011-28901234',
+    commissionRate: Number(hospitalData.commissionRate) || 10,
+    licenseNumber: hospitalData.licenseNumber || `NABH-${Math.floor(10000 + Math.random() * 90000)}`,
+    createdAt: serverTimestamp()
+  };
+  await setDoc(docRef, payload, { merge: true });
+  return payload;
+}
+
+/**
+ * Remove or Archive Hospital Facility
+ */
+export async function deleteHospital(hospitalId) {
+  const docRef = doc(db, 'hospitals', hospitalId);
+  return await deleteDoc(docRef);
+}
+
+/**
+ * Add Doctor directly under a specific hospital (Admin / Facility Manager)
+ */
+export async function addDoctorDirectly(doctorData) {
+  const doctorId = doctorData.id || `dr-${Date.now()}`;
+  const docRef = doc(db, 'doctors', doctorId);
+  const todayKey = getTodayDateKey();
+  const payload = {
+    id: doctorId,
+    name: doctorData.name,
+    email: doctorData.email || `${doctorId}@hospital.com`,
+    phone: doctorData.phone || '9876543210',
+    department: doctorData.department || 'General Medicine',
+    hospitalId: doctorData.hospitalId || 'citycare-central',
+    hospitalName: doctorData.hospitalName || 'CityCare Central Hospital',
+    qualification: doctorData.qualification || 'MBBS, MD',
+    councilRegistration: doctorData.councilRegistration || `MCI-${Math.floor(10000 + Math.random() * 90000)}`,
+    experienceYears: Number(doctorData.experienceYears) || 8,
+    roomNumber: doctorData.roomNumber || 'Room 101',
+    floorWing: doctorData.floorWing || 'Ground Floor, OPD Wing A',
+    timingSlot: doctorData.timingSlot || '09:00 AM - 01:00 PM',
+    avgConsultationMinutes: Number(doctorData.avgConsultationMinutes) || 10,
+    status: doctorData.status || 'approved',
+    queuePaused: false,
+    activeQueueDate: todayKey,
+    consultationFee: Number(doctorData.consultationFee) || 500,
+    bio: doctorData.bio || 'Senior medical specialist providing dedicated clinical consultations.',
+    createdAt: serverTimestamp()
+  };
+  await setDoc(docRef, payload, { merge: true });
+
+  // Initialize counter doc
+  const counterRef = doc(db, 'doctors', doctorId, 'counters', todayKey);
+  await setDoc(counterRef, { lastToken: 0, dateKey: todayKey }, { merge: true });
+
+  return payload;
 }
 
 /**
@@ -469,8 +551,9 @@ export async function seedDemoData() {
     await setDoc(hospRef, hosp, { merge: true });
   }
 
-  // 2. Seed Approved Doctors & Pending KYC Doctors
+  // 2. Seed Approved Doctors & Pending KYC Doctors across all Partner Hospitals
   const demoDoctors = [
+    // --- CITYCARE CENTRAL HOSPITAL ---
     {
       id: "dr-mehta",
       name: "Dr. Rajesh Mehta",
@@ -551,28 +634,254 @@ export async function seedDemoData() {
       consultationFee: 900,
       bio: "Interventional cardiologist committed to preventive cardiovascular health and echo evaluations."
     },
-    // Doctor with PENDING KYC Approval (for Admin Review Demo)
+
+    // --- APOLLO HEALTH CITY ---
     {
-      id: "dr-ananya-pending",
-      name: "Dr. Ananya Deshmukh",
-      email: "dr.ananya@fortis.com",
-      department: "Neurology & Brain Sciences",
-      hospitalId: "citycare-central",
-      hospitalName: "CityCare Central Hospital",
-      qualification: "MBBS, MD, DM (Neurology) - AIIMS New Delhi",
-      councilRegistration: "MCI-91820-DL-KYC-VERIFY",
-      experienceYears: 7,
-      roomNumber: "Room 502",
-      floorWing: "5th Floor, Neuro Tower",
-      timingSlot: "11:00 AM - 04:00 PM",
-      avgConsultationMinutes: 20,
-      status: "pending", // Waiting for Admin approval!
+      id: "dr-saxena-apollo",
+      name: "Dr. Arjun Saxena",
+      email: "dr.saxena@apollohealth.com",
+      department: "Cardiology",
+      hospitalId: "apollo-health",
+      hospitalName: "Apollo Health City",
+      qualification: "MBBS, MD, DM (Cardiology), FACC",
+      councilRegistration: "MCI-88219-DL",
+      experienceYears: 18,
+      roomNumber: "Room C-101",
+      floorWing: "Ground Floor, Apollo Heart Block",
+      timingSlot: "08:30 AM - 01:30 PM",
+      avgConsultationMinutes: 15,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 1200,
+      bio: "Chief of Interventional Cardiology with expertise in complex coronary angioplasty and TAVR procedures."
+    },
+    {
+      id: "dr-kapoor-apollo",
+      name: "Dr. Shalini Kapoor",
+      email: "dr.kapoor@apollohealth.com",
+      department: "Neurology",
+      hospitalId: "apollo-health",
+      hospitalName: "Apollo Health City",
+      qualification: "MBBS, MD, DM (Neurology)",
+      councilRegistration: "MCI-71402-MH",
+      experienceYears: 13,
+      roomNumber: "Room N-204",
+      floorWing: "2nd Floor, Neuro Tower",
+      timingSlot: "10:00 AM - 03:00 PM",
+      avgConsultationMinutes: 18,
+      status: "approved",
       queuePaused: false,
       activeQueueDate: todayKey,
       consultationFee: 1000,
-      bio: "Newly registered neurologist awaiting hospital administration verification of Medical Council of India license.",
-      kycSubmittedAt: new Date(Date.now() - 30 * 60000)
+      bio: "Neurologist specializing in stroke management, epilepsy, and Parkinson's rehabilitation."
     },
+    {
+      id: "dr-gupta-apollo",
+      name: "Dr. Rohan Gupta",
+      email: "dr.gupta@apollohealth.com",
+      department: "Gastroenterology",
+      hospitalId: "apollo-health",
+      hospitalName: "Apollo Health City",
+      qualification: "MBBS, MD, DM (Gastroenterology)",
+      councilRegistration: "MCI-64910-UP",
+      experienceYears: 11,
+      roomNumber: "Room G-305",
+      floorWing: "3rd Floor, Digestive Health Center",
+      timingSlot: "11:00 AM - 04:00 PM",
+      avgConsultationMinutes: 12,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 850,
+      bio: "Senior gastroenterologist specializing in therapeutic endoscopy and liver disease management."
+    },
+    {
+      id: "dr-sundaram-apollo",
+      name: "Dr. Meenakshi Sundaram",
+      email: "dr.sundaram@apollohealth.com",
+      department: "Oncology",
+      hospitalId: "apollo-health",
+      hospitalName: "Apollo Health City",
+      qualification: "MBBS, MD, DM (Medical Oncology)",
+      councilRegistration: "MCI-58319-TN",
+      experienceYears: 15,
+      roomNumber: "Room O-401",
+      floorWing: "4th Floor, Cancer Care Pavilion",
+      timingSlot: "09:00 AM - 02:00 PM",
+      avgConsultationMinutes: 20,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 1500,
+      bio: "Precision oncology specialist focused on targeted therapies, immunotherapy, and breast cancer."
+    },
+
+    // --- FORTIS SUPER SPECIALITY HOSPITAL ---
+    {
+      id: "dr-trivedi-fortis",
+      name: "Dr. Alok Trivedi",
+      email: "dr.trivedi@fortiscare.com",
+      department: "Pediatrics",
+      hospitalId: "fortis-hospital",
+      hospitalName: "Fortis Super Speciality Hospital",
+      qualification: "MBBS, MS, MCh (Pediatric Surgery)",
+      councilRegistration: "MCI-43189-DL",
+      experienceYears: 16,
+      roomNumber: "Room P-102",
+      floorWing: "1st Floor, Child & Mother Care Wing",
+      timingSlot: "09:00 AM - 02:00 PM",
+      avgConsultationMinutes: 12,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 900,
+      bio: "Pediatric surgeon offering comprehensive neonatal and child trauma care."
+    },
+    {
+      id: "dr-singhania-fortis",
+      name: "Dr. Ritu Singhania",
+      email: "dr.singhania@fortiscare.com",
+      department: "Pulmonology",
+      hospitalId: "fortis-hospital",
+      hospitalName: "Fortis Super Speciality Hospital",
+      qualification: "MBBS, MD (Pulmonary Medicine), FCCP",
+      councilRegistration: "MCI-59124-WB",
+      experienceYears: 12,
+      roomNumber: "Room R-203",
+      floorWing: "2nd Floor, Chest & Allergy Center",
+      timingSlot: "10:00 AM - 03:00 PM",
+      avgConsultationMinutes: 14,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 800,
+      bio: "Pulmonologist with expertise in asthma, sleep apnea, and post-viral respiratory health."
+    },
+    {
+      id: "dr-joshi-fortis",
+      name: "Dr. Devendra Joshi",
+      email: "dr.joshi@fortiscare.com",
+      department: "Orthopedics",
+      hospitalId: "fortis-hospital",
+      hospitalName: "Fortis Super Speciality Hospital",
+      qualification: "MBBS, MS (Orthopedics), Fellowship Joint Replacement",
+      councilRegistration: "MCI-31298-GJ",
+      experienceYears: 20,
+      roomNumber: "Room S-301",
+      floorWing: "3rd Floor, Bone & Joint Institute",
+      timingSlot: "10:30 AM - 04:00 PM",
+      avgConsultationMinutes: 15,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 1100,
+      bio: "Renowned joint replacement and robotic knee reconstruction surgeon."
+    },
+    {
+      id: "dr-sen-fortis",
+      name: "Dr. Kritika Sen",
+      email: "dr.sen@fortiscare.com",
+      department: "Dermatology",
+      hospitalId: "fortis-hospital",
+      hospitalName: "Fortis Super Speciality Hospital",
+      qualification: "MBBS, MD (DVL - Dermatology)",
+      councilRegistration: "MCI-76501-KA",
+      experienceYears: 8,
+      roomNumber: "Room D-105",
+      floorWing: "1st Floor, Derma & Aesthetic Clinic",
+      timingSlot: "11:00 AM - 05:00 PM",
+      avgConsultationMinutes: 10,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 700,
+      bio: "Consultant dermatologist specializing in chronic eczema, vitiligo, and clinical aesthetics."
+    },
+
+    // --- MAX HEALTHCARE SUPER SPECIALITY ---
+    {
+      id: "dr-goel-max",
+      name: "Dr. Sanjay Goel",
+      email: "dr.goel@maxhealthcare.com",
+      department: "General Medicine",
+      hospitalId: "max-super",
+      hospitalName: "Max Healthcare Super Speciality",
+      qualification: "MBBS, MD (Internal Medicine), PGD Diabetology",
+      councilRegistration: "MCI-62901-DL",
+      experienceYears: 17,
+      roomNumber: "Room M-101",
+      floorWing: "Ground Floor, Primary Care OPD",
+      timingSlot: "08:00 AM - 01:00 PM",
+      avgConsultationMinutes: 10,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 650,
+      bio: "Diabetologist and internist managing complex chronic lifestyle conditions and geriatric health."
+    },
+    {
+      id: "dr-agrawal-max",
+      name: "Dr. Preeti Agrawal",
+      email: "dr.agrawal@maxhealthcare.com",
+      department: "ENT",
+      hospitalId: "max-super",
+      hospitalName: "Max Healthcare Super Speciality",
+      qualification: "MBBS, MS (ENT, Head & Neck)",
+      councilRegistration: "MCI-55418-UP",
+      experienceYears: 11,
+      roomNumber: "Room E-202",
+      floorWing: "2nd Floor, ENT & Hearing Clinic",
+      timingSlot: "09:30 AM - 02:30 PM",
+      avgConsultationMinutes: 12,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 750,
+      bio: "ENT surgeon specializing in endoscopic sinus surgery, vertigo, and microsurgery of the ear."
+    },
+    {
+      id: "dr-batra-max",
+      name: "Dr. Tarun Batra",
+      email: "dr.batra@maxhealthcare.com",
+      department: "Internal Medicine",
+      hospitalId: "max-super",
+      hospitalName: "Max Healthcare Super Speciality",
+      qualification: "MBBS, MD (Internal Medicine), DM (Nephrology)",
+      councilRegistration: "MCI-48209-HR",
+      experienceYears: 14,
+      roomNumber: "Room K-303",
+      floorWing: "3rd Floor, Renal & Dialysis Block",
+      timingSlot: "10:00 AM - 03:00 PM",
+      avgConsultationMinutes: 15,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 950,
+      bio: "Nephrologist providing critical renal care, dialysis management, and transplant follow-up."
+    },
+    {
+      id: "dr-deshmukh-max",
+      name: "Dr. Ananya Deshmukh",
+      email: "dr.deshmukh@maxhealthcare.com",
+      department: "Dermatology",
+      hospitalId: "max-super",
+      hospitalName: "Max Healthcare Super Speciality",
+      qualification: "MBBS, MD (Dermatology)",
+      councilRegistration: "MCI-91820-DL",
+      experienceYears: 9,
+      roomNumber: "Room B-402",
+      floorWing: "4th Floor, Dermatology Suite",
+      timingSlot: "11:00 AM - 04:00 PM",
+      avgConsultationMinutes: 12,
+      status: "approved",
+      queuePaused: false,
+      activeQueueDate: todayKey,
+      consultationFee: 800,
+      bio: "Senior consultant focused on pediatric dermatology, trichology, and autoimmune skin disorders."
+    },
+
+    // --- PENDING KYC DOCTORS (FOR ADMIN REVIEW) ---
     {
       id: "dr-karan-pending",
       name: "Dr. Karan Malhotra",
@@ -587,7 +896,7 @@ export async function seedDemoData() {
       floorWing: "Ground Floor, Skin Clinic",
       timingSlot: "02:00 PM - 07:00 PM",
       avgConsultationMinutes: 10,
-      status: "pending", // Waiting for Admin approval!
+      status: "pending",
       queuePaused: false,
       activeQueueDate: todayKey,
       consultationFee: 700,
