@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
   User, 
@@ -15,10 +14,12 @@ import {
   Clock,
   LogIn,
   ShieldCheck,
-  Pill
+  Pill,
+  Plus
 } from 'lucide-react';
 import { seedDemoData, subscribePendingDoctors, subscribeUserHistory } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import OnboardHospitalModal from './OnboardHospitalModal';
 
 export default function Navbar({ currentRole, setCurrentRole, activeHospital }) {
   const { currentUser, openAuthModal, logout } = useAuth();
@@ -26,6 +27,7 @@ export default function Navbar({ currentRole, setCurrentRole, activeHospital }) 
   const [seeded, setSeedSuccess] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [historyCount, setHistoryCount] = useState(0);
+  const [showOnboardModal, setShowOnboardModal] = useState(false);
 
   // Theme state: default to 'light' as requested by user
   const [theme, setTheme] = useState(() => {
@@ -369,8 +371,39 @@ export default function Navbar({ currentRole, setCurrentRole, activeHospital }) 
               </>
             )}
           </button>
+
+          {/* PERMANENT + ONBOARD HOSPITAL BUTTON */}
+          <button
+            onClick={() => setShowOnboardModal(true)}
+            style={{
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.82rem',
+              fontWeight: 900,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(5, 150, 105, 0.35)',
+              transition: 'transform 0.15s'
+            }}
+            title="Onboard & Add New Hospital to MediQ"
+          >
+            <Plus size={15} />
+            <span>+ Onboard Hospital</span>
+          </button>
         </div>
       </div>
+
+      {/* GLOBAL ONBOARD HOSPITAL MODAL */}
+      <OnboardHospitalModal 
+        isOpen={showOnboardModal} 
+        onClose={() => setShowOnboardModal(false)}
+        onHospitalCreated={() => setCurrentRole('hospitals')}
+      />
     </header>
   );
 }
