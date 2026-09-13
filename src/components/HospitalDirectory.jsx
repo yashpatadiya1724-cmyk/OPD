@@ -1,5 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { subscribeHospitals, subscribeDoctorList, SYMPTOM_MAP } from '../firebase';
+import { 
+  subscribeHospitals, 
+  subscribeDoctorList, 
+  SYMPTOM_MAP,
+  onboardHospital,
+  addDoctorDirectly
+} from '../firebase';
+import { 
+  Building2, 
+  Plus, 
+  Search, 
+  MapPin, 
+  Clock, 
+  Stethoscope, 
+  CheckCircle2, 
+  Sparkles, 
+  Star,
+  X,
+  Phone
+} from 'lucide-react';
 
 export default function HospitalDirectory({ onSelectHospital, activeHospitalId }) {
   const [hospitals, setHospitals] = useState([]);
@@ -8,6 +27,45 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [filterWait, setFilterWait] = useState(false);
   const [modalHospital, setModalHospital] = useState(null);
+  
+  // Hospital Onboarding Modal
+  const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [feedback, setFeedback] = useState({ type: '', message: '' });
+
+  // Onboard form state
+  const [hospForm, setHospForm] = useState({
+    name: '',
+    tagline: 'Premier Multi-Speciality Healthcare & Trauma Centre',
+    address: 'Ring Road, Sector 15, New Delhi',
+    city: 'New Delhi',
+    distance: '2.0 km',
+    avgWaitMinutes: 12,
+    rating: 4.9,
+    reviewsCount: 150,
+    specialties: 'General Medicine, Pediatrics & Child Health, Orthopedics, Cardiology',
+    timing: '24x7 Emergency | OPD: 8:00 AM - 6:00 PM',
+    features: 'Live Token Tracker, Digital Prescription, Express Pharmacy, Instant Room Alert',
+    contactPhone: '011-28905566',
+    image: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80',
+    // Optional Initial Doctor
+    doctorName: '',
+    doctorDept: 'General Medicine',
+    doctorFee: 500,
+    doctorRoom: 'Room 101'
+  });
+
+  // Add Doctor to specific hospital modal state
+  const [showAddDocForm, setShowAddDocForm] = useState(false);
+  const [newDocForm, setNewDocForm] = useState({
+    name: '',
+    department: 'General Medicine',
+    qualification: 'MBBS, MD',
+    councilRegistration: '',
+    roomNumber: 'Room 102',
+    timingSlot: '09:00 AM - 01:30 PM',
+    consultationFee: 500
+  });
 
   useEffect(() => {
     const unsubHosp = subscribeHospitals((list) => {
@@ -53,8 +111,138 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
     return matchesQuery && matchesSpecialty && matchesWait;
   });
 
+  const handleOnboardSubmit = async (e) => {
+    e.preventDefault();
+    if (!hospForm.name.trim()) {
+      alert('Please enter Hospital Name');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const createdHosp = await onboardHospital({
+        name: hospForm.name.trim(),
+        tagline: hospForm.tagline,
+        address: hospForm.address,
+        city: hospForm.city,
+        distance: hospForm.distance,
+        avgWaitMinutes: Number(hospForm.avgWaitMinutes) || 12,
+        rating: Number(hospForm.rating) || 4.8,
+        reviewsCount: Number(hospForm.reviewsCount) || 100,
+        specialties: hospForm.specialties,
+        timing: hospForm.timing,
+        features: hospForm.features,
+        contactPhone: hospForm.contactPhone,
+        image: hospForm.image
+      });
+
+      // If lead doctor is provided, create doctor under this hospital
+      if (hospForm.doctorName.trim()) {
+        await addDoctorDirectly({
+          name: hospForm.doctorName.trim(),
+          department: hospForm.doctorDept || 'General Medicine',
+          hospitalId: createdHosp.id,
+          hospitalName: createdHosp.name,
+          consultationFee: Number(hospForm.doctorFee) || 500,
+          roomNumber: hospForm.doctorRoom || 'Room 101',
+          status: 'approved'
+        });
+      }
+
+      setFeedback({
+        type: 'success',
+        message: `✓ Successfully Onboarded "${createdHosp.name}"! It is now live in the marketplace.`
+      });
+      setShowOnboardModal(false);
+      setHospForm({
+        name: '',
+        tagline: 'Premier Multi-Speciality Healthcare & Trauma Centre',
+        address: 'Ring Road, Sector 15, New Delhi',
+        city: 'New Delhi',
+        distance: '2.0 km',
+        avgWaitMinutes: 12,
+        rating: 4.9,
+        reviewsCount: 150,
+        specialties: 'General Medicine, Pediatrics & Child Health, Orthopedics, Cardiology',
+        timing: '24x7 Emergency | OPD: 8:00 AM - 6:00 PM',
+        features: 'Live Token Tracker, Digital Prescription, Express Pharmacy, Instant Room Alert',
+        contactPhone: '011-28905566',
+        image: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80',
+        doctorName: '',
+        doctorDept: 'General Medicine',
+        doctorFee: 500,
+        doctorRoom: 'Room 101'
+      });
+    } catch (err) {
+      console.error(err);
+      setFeedback({ type: 'error', message: 'Failed to onboard hospital: ' + err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddDoctorToModalHosp = async (e) => {
+    e.preventDefault();
+    if (!newDocForm.name.trim() || !modalHospital) {
+      alert('Please enter doctor name');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await addDoctorDirectly({
+        ...newDocForm,
+        name: newDocForm.name.trim(),
+        hospitalId: modalHospital.id,
+        hospitalName: modalHospital.name,
+        councilRegistration: newDocForm.councilRegistration || `MCI-${Math.floor(10000 + Math.random() * 90000)}-DL`,
+        status: 'approved'
+      });
+      setShowAddDocForm(false);
+      setNewDocForm({
+        name: '',
+        department: 'General Medicine',
+        qualification: 'MBBS, MD',
+        councilRegistration: '',
+        roomNumber: 'Room 102',
+        timingSlot: '09:00 AM - 01:30 PM',
+        consultationFee: 500
+      });
+      setFeedback({
+        type: 'success',
+        message: `✓ Added ${newDocForm.name} to ${modalHospital.name} roster!`
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to add doctor: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '1.5rem 1rem 4rem' }}>
+      
+      {/* Feedback notification */}
+      {feedback.message && (
+        <div style={{
+          background: feedback.type === 'success' ? '#dcfce7' : '#fee2e2',
+          border: `1.5px solid ${feedback.type === 'success' ? '#16a34a' : '#ef4444'}`,
+          color: feedback.type === 'success' ? '#166534' : '#991b1b',
+          padding: '0.85rem 1.25rem',
+          borderRadius: '0.75rem',
+          fontWeight: 800,
+          fontSize: '0.9rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>{feedback.message}</span>
+          <button onClick={() => setFeedback({ type: '', message: '' })} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 900 }}>✕</button>
+        </div>
+      )}
+
       {/* Hero MediQ Marketplace Banner */}
       <div style={{
         background: 'linear-gradient(135deg, #090d16 0%, #1e293b 100%)',
@@ -76,8 +264,33 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
           borderRadius: '50%'
         }} />
 
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.12)', padding: '0.35rem 0.85rem', borderRadius: '2rem', fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '1rem', color: '#38bdf8' }}>
-          <span>🏥</span> MediQ · Multi-Hospital OPD Marketplace
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.12)', padding: '0.35rem 0.85rem', borderRadius: '2rem', fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#38bdf8' }}>
+            <span>🏥</span> MediQ · Multi-Hospital OPD Marketplace
+          </div>
+
+          {/* MAIN + ONBOARD NEW HOSPITAL BUTTON */}
+          <button
+            onClick={() => setShowOnboardModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.65rem 1.35rem',
+              borderRadius: '0.75rem',
+              fontWeight: 900,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 6px 18px rgba(5, 150, 105, 0.4)',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            <Plus size={18} />
+            <span>+ Add / Onboard New Hospital</span>
+          </button>
         </div>
 
         <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '0.75rem', color: '#ffffff' }}>
@@ -138,52 +351,119 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
           🩺 Symptom-to-Specialty Smart Routing:
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-          <button
-            onClick={() => { setSelectedSpecialty('All'); setSearchQuery(''); }}
+          {symptomPills.map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                setSelectedSpecialty(item.spec);
+                setSearchQuery('');
+              }}
+              style={{
+                background: selectedSpecialty === item.spec ? '#0284c7' : '#ffffff',
+                color: selectedSpecialty === item.spec ? '#ffffff' : '#090d16',
+                border: selectedSpecialty === item.spec ? '1.5px solid #0284c7' : '1.5px solid #e2e8f0',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '2rem',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Directory Filter Bar & Onboard Quick Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem',
+        marginBottom: '1.5rem',
+        background: '#ffffff',
+        padding: '0.85rem 1.25rem',
+        borderRadius: '1rem',
+        border: '1.5px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569' }}>
+            Filter Specialty:
+          </span>
+          <select
+            value={selectedSpecialty}
+            onChange={(e) => setSelectedSpecialty(e.target.value)}
             style={{
-              padding: '0.45rem 0.9rem',
-              borderRadius: '2rem',
-              fontSize: '0.8rem',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '0.5rem',
+              fontSize: '0.85rem',
               fontWeight: 800,
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
-              border: selectedSpecialty === 'All' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-              background: selectedSpecialty === 'All' ? '#0284c7' : '#ffffff',
-              color: selectedSpecialty === 'All' ? '#ffffff' : '#090d16'
+              color: '#090d16',
+              outline: 'none'
             }}
           >
-            All Hospitals
+            <option value="All">All Specialties</option>
+            <option value="General Medicine">General Medicine</option>
+            <option value="Pediatrics">Pediatrics &amp; Child Health</option>
+            <option value="Orthopedics">Orthopedics &amp; Joint Care</option>
+            <option value="Cardiology">Cardiology &amp; Chest</option>
+            <option value="Neurology">Neurology</option>
+            <option value="Dermatology">Dermatology</option>
+          </select>
+
+          <button
+            onClick={() => setFilterWait(!filterWait)}
+            style={{
+              background: filterWait ? '#ecfdf5' : '#f8fafc',
+              border: filterWait ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+              color: filterWait ? '#047857' : '#475569',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '0.5rem',
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              cursor: 'pointer'
+            }}
+          >
+            ⚡ Wait &lt; 15 mins only
           </button>
-          {symptomPills.map((pill) => {
-            const isSelected = selectedSpecialty === pill.spec;
-            return (
-              <button
-                key={pill.label}
-                onClick={() => setSelectedSpecialty(isSelected ? 'All' : pill.spec)}
-                style={{
-                  padding: '0.45rem 0.9rem',
-                  borderRadius: '2rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  border: isSelected ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                  background: isSelected ? '#e0f2fe' : '#ffffff',
-                  color: isSelected ? '#0369a1' : '#090d16',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {pill.label}
-              </button>
-            );
-          })}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#64748b' }}>
+            Showing <strong>{filteredHospitals.length}</strong> Partner Hospitals
+          </div>
+          <button
+            onClick={() => setShowOnboardModal(true)}
+            style={{
+              background: '#090d16',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.45rem 0.95rem',
+              borderRadius: '0.5rem',
+              fontWeight: 900,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
+          >
+            <Plus size={15} />
+            <span>+ Add Hospital</span>
+          </button>
         </div>
       </div>
 
       {/* Hospital Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1.75rem' }}>
         {filteredHospitals.map((hosp) => {
-          const approvedHospDoctors = doctors.filter(d => d.hospitalId === hosp.id && d.status === 'approved');
+          const approvedHospDoctors = doctors.filter(d => d.hospitalId === hosp.id && (d.status === 'approved' || !d.status));
           const isCurrentlyActive = activeHospitalId === hosp.id;
 
           // Compute wait-time band per MediQ PRD Section 9.1
@@ -263,39 +543,44 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                   bottom: '12px',
                   left: '12px',
                   background: waitBg,
-                  border: `1.5px solid ${waitColor}`,
                   color: waitColor,
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '0.6rem',
+                  border: `1px solid ${waitColor}40`,
+                  padding: '0.3rem 0.65rem',
+                  borderRadius: '0.5rem',
                   fontWeight: 900,
-                  fontSize: '0.8rem',
+                  fontSize: '0.75rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem'
                 }}>
-                  <span>⏱️ {waitBand} (~{hosp.avgWaitMinutes} mins)</span>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: waitColor }} />
+                  <span>~{hosp.avgWaitMinutes}m ({waitBand})</span>
                 </div>
               </div>
 
               {/* Card Body */}
               <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#090d16', margin: '0 0 0.35rem', lineHeight: 1.25 }}>
-                  {hosp.name}
-                </h3>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#090d16', margin: 0, letterSpacing: '-0.01em' }}>
+                    {hosp.name}
+                  </h3>
+                </div>
 
-                <p style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600, margin: '0 0 0.75rem', lineHeight: 1.4 }}>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600, margin: '0 0 0.75rem', lineHeight: 1.4 }}>
                   {hosp.tagline}
                 </p>
 
-                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.85rem' }}>
-                  <span>🏢</span> {hosp.address}
+                <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.85rem' }}>
+                  <MapPin size={14} color="#64748b" />
+                  <span>{hosp.address}</span>
                 </div>
 
-                {/* Specialties Badges */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
-                  {hosp.specialties && hosp.specialties.map((spec) => (
+                {/* Speciality Tags */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1.1rem' }}>
+                  {(Array.isArray(hosp.specialties) ? hosp.specialties : ['General Medicine', 'Pediatrics']).map((spec, i) => (
                     <span
-                      key={spec}
+                      key={i}
                       style={{
                         background: '#f8fafc',
                         border: '1px solid #e2e8f0',
@@ -311,7 +596,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                   ))}
                 </div>
 
-                {/* Booking Modes Support (PRD Section 9.3) */}
+                {/* Booking Modes Support */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '0.2rem 0.55rem', borderRadius: '0.4rem' }}>
                     ⚡ Instant Walk-In
@@ -337,7 +622,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                       cursor: 'pointer'
                     }}
                   >
-                    View Clinicians
+                    👨‍⚕️ Clinicians ({approvedHospDoctors.length})
                   </button>
                   <button
                     onClick={() => onSelectHospital(hosp)}
@@ -368,7 +653,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
         })}
       </div>
 
-      {/* Hospital Clinicians Detail Modal */}
+      {/* MODAL 1: HOSPITAL CLINICIANS DETAIL MODAL */}
       {modalHospital && (
         <div style={{
           position: 'fixed',
@@ -405,7 +690,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                 </p>
               </div>
               <button
-                onClick={() => setModalHospital(null)}
+                onClick={() => { setModalHospital(null); setShowAddDocForm(false); }}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontWeight: 900 }}
               >
                 ✕
@@ -413,12 +698,98 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 900, color: '#090d16', marginBottom: '0.75rem' }}>
-                Active Verified Doctors ({doctors.filter(d => d.hospitalId === modalHospital.id && d.status === 'approved').length})
-              </h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 900, color: '#090d16', margin: 0 }}>
+                  Active Verified Doctors ({doctors.filter(d => d.hospitalId === modalHospital.id && (d.status === 'approved' || !d.status)).length})
+                </h4>
+                <button
+                  onClick={() => setShowAddDocForm(!showAddDocForm)}
+                  style={{
+                    background: '#090d16',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '0.4rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 900,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showAddDocForm ? '✕ Cancel' : '+ Add Doctor to Roster'}
+                </button>
+              </div>
+
+              {/* Add doctor directly from modal */}
+              {showAddDocForm && (
+                <form onSubmit={handleAddDoctorToModalHosp} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1.5px solid #cbd5e1', marginBottom: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginBottom: '0.65rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '0.2rem' }}>Doctor Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Dr. Full Name"
+                        value={newDocForm.name}
+                        onChange={(e) => setNewDocForm({ ...newDocForm, name: e.target.value })}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '0.2rem' }}>Department</label>
+                      <input
+                        type="text"
+                        placeholder="General Medicine, Pediatrics, etc."
+                        value={newDocForm.department}
+                        onChange={(e) => setNewDocForm({ ...newDocForm, department: e.target.value })}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700 }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginBottom: '0.75rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '0.2rem' }}>Room Number</label>
+                      <input
+                        type="text"
+                        placeholder="Room 102"
+                        value={newDocForm.roomNumber}
+                        onChange={(e) => setNewDocForm({ ...newDocForm, roomNumber: e.target.value })}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '0.2rem' }}>Consultation Fee (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="500"
+                        value={newDocForm.consultationFee}
+                        onChange={(e) => setNewDocForm({ ...newDocForm, consultationFee: e.target.value })}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700 }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    style={{
+                      background: '#059669',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.55rem',
+                      borderRadius: '0.4rem',
+                      fontWeight: 900,
+                      fontSize: '0.82rem',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✓ Save Clinician
+                  </button>
+                </form>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {doctors
-                  .filter(d => d.hospitalId === modalHospital.id && d.status === 'approved')
+                  .filter(d => d.hospitalId === modalHospital.id && (d.status === 'approved' || !d.status))
                   .map(doc => (
                     <div key={doc.id} style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '0.75rem', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
@@ -434,6 +805,12 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                       </div>
                     </div>
                   ))}
+
+                {doctors.filter(d => d.hospitalId === modalHospital.id && (d.status === 'approved' || !d.status)).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b', fontWeight: 600 }}>
+                    No clinicians assigned yet. Click "+ Add Doctor to Roster" above!
+                  </div>
+                )}
               </div>
             </div>
 
@@ -459,6 +836,195 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
           </div>
         </div>
       )}
+
+      {/* MODAL 2: ONBOARD NEW HOSPITAL MODAL */}
+      {showOnboardModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(9, 13, 22, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '1.25rem',
+            maxWidth: '640px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '2rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '2px solid #e2e8f0'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#059669', textTransform: 'uppercase' }}>
+                  HOSPITAL NETWORK EXPANSION
+                </span>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#090d16', margin: '0.2rem 0 0' }}>
+                  🏥 Onboard New Hospital Facility
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowOnboardModal(false)}
+                style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontWeight: 900 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleOnboardSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                    Hospital Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Lilavati Hospital, AIIMS, Medanta"
+                    value={hospForm.name}
+                    onChange={(e) => setHospForm({ ...hospForm, name: e.target.value })}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                    Tagline &amp; Speciality Highlights
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Premier Trauma, Multi-Speciality &amp; Robotic Surgery Centre"
+                    value={hospForm.tagline}
+                    onChange={(e) => setHospForm({ ...hospForm, tagline: e.target.value })}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                      City / Sector
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. New Delhi / Mumbai"
+                      value={hospForm.city}
+                      onChange={(e) => setHospForm({ ...hospForm, city: e.target.value })}
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                      Distance
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1.8 km"
+                      value={hospForm.distance}
+                      onChange={(e) => setHospForm({ ...hospForm, distance: e.target.value })}
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                    Full Address
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Plot 4, Ring Road, Sector 14, New Delhi"
+                    value={hospForm.address}
+                    onChange={(e) => setHospForm({ ...hospForm, address: e.target.value })}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#090d16', marginBottom: '0.35rem' }}>
+                    Specialties (Comma Separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="General Medicine, Pediatrics, Orthopedics, Cardiology, Dermatology"
+                    value={hospForm.specialties}
+                    onChange={(e) => setHospForm({ ...hospForm, specialties: e.target.value })}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1.5px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+                  />
+                </div>
+
+                {/* Optional Lead Doctor */}
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0284c7', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                    👨‍⚕️ Optional: Add Lead Clinician (First Doctor)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Doctor Name (e.g. Dr. A. K. Roy)"
+                      value={hospForm.doctorName}
+                      onChange={(e) => setHospForm({ ...hospForm, doctorName: e.target.value })}
+                      style={{ padding: '0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Speciality (e.g. General Medicine)"
+                      value={hospForm.doctorDept}
+                      onChange={(e) => setHospForm({ ...hospForm, doctorDept: e.target.value })}
+                      style={{ padding: '0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Room Number (e.g. Room 101)"
+                      value={hospForm.doctorRoom}
+                      onChange={(e) => setHospForm({ ...hospForm, doctorRoom: e.target.value })}
+                      style={{ padding: '0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Consult Fee ₹ (e.g. 500)"
+                      value={hospForm.doctorFee}
+                      onChange={(e) => setHospForm({ ...hospForm, doctorFee: e.target.value })}
+                      style={{ padding: '0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  style={{
+                    marginTop: '0.5rem',
+                    width: '100%',
+                    background: '#059669',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.9rem',
+                    borderRadius: '0.65rem',
+                    fontWeight: 900,
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(5, 150, 105, 0.25)'
+                  }}
+                >
+                  {actionLoading ? 'Onboarding Hospital...' : '✓ Complete Hospital Onboarding'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
