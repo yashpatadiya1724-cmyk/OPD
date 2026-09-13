@@ -621,11 +621,15 @@ export default function PharmacyConsole() {
                       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
                         {isPreparing && (
                           <button
-                            onClick={() => handleCallReady(item)}
-                            disabled={isProcessing}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleCallReady(item);
+                            }}
                             style={{
                               flex: 1,
-                              padding: '0.65rem',
+                              padding: '0.7rem',
                               background: '#d97706',
                               color: '#fff',
                               border: 'none',
@@ -635,53 +639,107 @@ export default function PharmacyConsole() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '0.4rem',
-                              fontSize: '0.85rem',
-                              boxShadow: '0 4px 10px rgba(217, 119, 6, 0.25)'
+                              gap: '0.45rem',
+                              fontSize: '0.88rem',
+                              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.3)'
                             }}
                           >
-                            <BellRing size={16} />
-                            <span>Mark Packed &amp; Call</span>
+                            <BellRing size={18} />
+                            <span>🔔 Call for Pickup ({selectedCounter.split(' ')[0]})</span>
                           </button>
                         )}
 
                         {isReady && (
-                          <button
-                            onClick={() => handleMarkDispensed(item)}
-                            disabled={isProcessing}
-                            style={{
-                              flex: 1,
-                              padding: '0.65rem',
-                              background: '#059669',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '10px',
-                              fontWeight: 900,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '0.4rem',
-                              fontSize: '0.85rem',
-                              boxShadow: '0 4px 10px rgba(5, 150, 105, 0.25)'
-                            }}
-                          >
-                            <PackageCheck size={16} />
-                            <span>Handover &amp; Mark Dispensed</span>
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.4rem', flex: 1 }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleMarkDispensed(item);
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '0.7rem',
+                                background: '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: 900,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.45rem',
+                                fontSize: '0.88rem',
+                                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)'
+                              }}
+                            >
+                              <PackageCheck size={18} />
+                              <span>📦 Mark Dispensed / Paid</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRevertPreparing(item);
+                              }}
+                              title="Revert to Preparing"
+                              style={{
+                                padding: '0.7rem 0.8rem',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                border: '1px solid #fde68a',
+                                borderRadius: '10px',
+                                fontWeight: 800,
+                                fontSize: '0.78rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ↩ Revert
+                            </button>
+                          </div>
                         )}
 
                         {isDispensed && (
-                          <div style={{ flex: 1, textAlign: 'center', fontSize: '0.82rem', color: '#059669', fontWeight: 900, padding: '0.5rem', background: '#dcfce7', borderRadius: '8px' }}>
-                            ✓ Dispensed at {item.counterNumber || 'Counter 1'}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '0.5rem' }}>
+                            <div style={{ flex: 1, textAlign: 'center', fontSize: '0.85rem', color: '#059669', fontWeight: 900, padding: '0.55rem', background: '#dcfce7', borderRadius: '8px' }}>
+                              ✓ Dispensed at {item.counterNumber || 'Counter 1'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRevertPreparing(item);
+                              }}
+                              style={{
+                                padding: '0.55rem 0.8rem',
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                fontWeight: 800,
+                                fontSize: '0.78rem',
+                                color: '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ↺ Reopen
+                            </button>
                           </div>
                         )}
 
                         <button
-                          onClick={() => setReceiptToken(item)}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setReceiptToken(item);
+                          }}
                           title="Print Digital Rx Receipt"
                           style={{
-                            padding: '0.65rem 0.85rem',
+                            padding: '0.7rem 0.9rem',
                             background: '#f1f5f9',
                             border: '1px solid #cbd5e1',
                             borderRadius: '10px',
@@ -692,13 +750,13 @@ export default function PharmacyConsole() {
                             justifyContent: 'center'
                           }}
                         >
-                          <Printer size={16} />
+                          <Printer size={18} />
                         </button>
                       </div>
 
                       {item.phoneNumber && (
-                        <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span>📞 Patient Phone: {item.phoneNumber}</span>
+                        <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem' }}>
+                          <span>📞 Patient: {item.phoneNumber}</span>
                           <a href={`tel:${item.phoneNumber}`} style={{ color: '#0284c7', fontWeight: 800, textDecoration: 'none' }}>
                             Call Patient
                           </a>
