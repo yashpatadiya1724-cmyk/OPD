@@ -12,9 +12,12 @@ import PublicDisplay from './components/PublicDisplay';
 import AdminAnalytics from './components/AdminAnalytics';
 import PharmacyConsole from './components/PharmacyConsole';
 import AuthModal from './components/AuthModal';
+import OnboardHospitalModal from './components/OnboardHospitalModal';
+import { Building2, Plus } from 'lucide-react';
 
 function AppContent() {
   const { isAuthModalOpen, closeAuthModal, authModalRole, currentUser } = useAuth();
+  const [showGlobalOnboardModal, setShowGlobalOnboardModal] = useState(false);
 
   const [currentRole, setCurrentRole] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -182,6 +185,44 @@ function AppContent() {
       }}>
         MediQ Marketplace &bull; Multi-Hospital OPD Discovery, Booking &amp; Live Queue Platform &bull; Powered by Google Firebase &amp; Cloud Functions
       </footer>
+
+      {/* PERSISTENT FLOATING ONBOARD HOSPITAL BUTTON (ALWAYS VISIBLE) */}
+      <button
+        onClick={() => setShowGlobalOnboardModal(true)}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+          color: '#ffffff',
+          border: '2.5px solid #ffffff',
+          padding: '0.85rem 1.4rem',
+          borderRadius: '2rem',
+          fontWeight: 900,
+          fontSize: '0.95rem',
+          cursor: 'pointer',
+          boxShadow: '0 8px 25px rgba(5, 150, 105, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.55rem',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+        title="Click to Add/Onboard a New Hospital to MediQ"
+      >
+        <Building2 size={20} />
+        <span>+ Onboard Hospital</span>
+      </button>
+
+      {/* GLOBAL ONBOARD HOSPITAL MODAL */}
+      <OnboardHospitalModal
+        isOpen={showGlobalOnboardModal}
+        onClose={() => setShowGlobalOnboardModal(false)}
+        onHospitalCreated={(hosp) => {
+          setActiveHospital(hosp);
+          setCurrentRole('hospitals');
+        }}
+      />
     </div>
   );
 }
