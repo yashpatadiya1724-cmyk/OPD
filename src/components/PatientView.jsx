@@ -1155,13 +1155,20 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
             </div>
           )}
 
-          {/* Main Token Hero Card */}
-          <div className="glass-card" style={{
-            padding: '2.25rem 1.75rem',
+          {/* Main Token Hero Card (Pinterest Aesthetic) */}
+          <div className="glass-card pinterest-card" style={{
+            padding: '2.5rem 1.75rem',
             textAlign: 'center',
             position: 'relative',
             overflow: 'hidden',
-            border: myTokenData?.status === 'in-progress' ? '2px solid var(--accent-emerald)' : '1px solid var(--border-subtle)'
+            borderRadius: '24px',
+            background: myTokenData?.status === 'in-progress' 
+              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.03) 100%)' 
+              : 'var(--bg-surface)',
+            border: myTokenData?.status === 'in-progress' ? '2.5px solid #059669' : '1.5px solid var(--border-subtle)',
+            boxShadow: myTokenData?.status === 'in-progress'
+              ? '0 20px 45px -10px rgba(5, 150, 105, 0.25)'
+              : '0 12px 35px -10px rgba(0, 0, 0, 0.06)'
           }}>
             
             {/* PRD v4: Priority Lane & Slot Badges */}

@@ -356,20 +356,22 @@ export default function LoginPage({ onLoginSuccess }) {
             <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'0.5rem' }}>
               {DEMO_PROFILES.map(p => (
                 <button key={p.key} onClick={() => handleDemo(p.key)} type="button"
+                  className="pinterest-card"
                   style={{
-                    padding:'0.6rem 0.75rem',
-                    borderRadius:'10px',
-                    border:`1.5px solid ${p.border}40`,
+                    padding:'0.65rem 0.8rem',
+                    borderRadius:'14px',
+                    border:`1.5px solid ${p.border}50`,
                     background: p.color,
                     textAlign:'left',
                     cursor:'pointer',
-                    transition:'all 0.15s',
-                    display:'flex', alignItems:'center', gap:'0.5rem'
+                    transition:'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                    display:'flex', alignItems:'center', gap:'0.6rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                   }}
                 >
-                  <span style={{ fontSize:'1.1rem' }}>{p.avatar}</span>
+                  <span style={{ fontSize:'1.25rem' }}>{p.avatar}</span>
                   <div>
-                    <div style={{ fontSize:'0.78rem', fontWeight:900, color:'var(--text-primary)' }}>{p.name}</div>
+                    <div style={{ fontSize:'0.82rem', fontWeight:900, color:'var(--text-primary)' }}>{p.name}</div>
                     <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', fontWeight:700 }}>{p.sub}</div>
                   </div>
                 </button>

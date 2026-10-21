@@ -163,6 +163,7 @@ function AppContent() {
               setActiveHospital(hosp);
               setCurrentRole('patient');
             }}
+            onNavigateToRole={(role) => setCurrentRole(role)}
           />
         )}
 

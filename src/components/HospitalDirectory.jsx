@@ -17,10 +17,14 @@ import {
   Sparkles, 
   Star,
   X,
-  Phone
+  Phone,
+  Bike,
+  Scan,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
 
-export default function HospitalDirectory({ onSelectHospital, activeHospitalId }) {
+export default function HospitalDirectory({ onSelectHospital, activeHospitalId, onNavigateToRole }) {
   const [hospitals, setHospitals] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -243,46 +247,86 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
         </div>
       )}
 
-      {/* Hero MediQ Marketplace Banner */}
+      {/* Hero MediQ Marketplace Banner (Pinterest-Inspired Bento Grid) */}
       <div style={{
-        background: 'linear-gradient(135deg, #090d16 0%, #1e293b 100%)',
+        background: 'linear-gradient(135deg, #090d16 0%, #0f172a 45%, #0369a1 100%)',
         color: '#ffffff',
-        borderRadius: '1.5rem',
-        padding: '2.5rem 2rem',
-        marginBottom: '2rem',
-        boxShadow: '0 20px 35px -10px rgba(9, 13, 22, 0.25)',
+        borderRadius: '24px',
+        padding: '2.5rem 2rem 2.25rem',
+        marginBottom: '1.75rem',
+        boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 1px rgba(255,255,255,0.2)',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        border: '1px solid rgba(255, 255, 255, 0.12)'
       }}>
         <div style={{
           position: 'absolute',
-          top: '-30px',
-          right: '-30px',
-          width: '260px',
-          height: '260px',
-          background: 'radial-gradient(circle, rgba(14, 165, 233, 0.25) 0%, transparent 70%)',
-          borderRadius: '50%'
+          top: '-40px',
+          right: '-40px',
+          width: '280px',
+          height: '280px',
+          background: 'radial-gradient(circle, rgba(56, 189, 248, 0.3) 0%, transparent 70%)',
+          borderRadius: '50%',
+          pointerEvents: 'none'
         }} />
 
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.12)', padding: '0.35rem 0.85rem', borderRadius: '2rem', fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '1rem', color: '#38bdf8' }}>
-          <span>🏥</span> MediQ · Multi-Hospital OPD Marketplace
+        <div style={{
+          position: 'absolute',
+          bottom: '-40px',
+          left: '20%',
+          width: '240px',
+          height: '240px',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, transparent 70%)',
+          borderRadius: '50%',
+          pointerEvents: 'none'
+        }} />
+
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(8px)', padding: '0.35rem 0.85rem', borderRadius: '2rem', fontSize: '0.78rem', fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '1rem', color: '#bae6fd', border: '1px solid rgba(255,255,255,0.2)' }}>
+          <span>🏥</span> MediQ &bull; Multi-Hospital OPD Marketplace &amp; Home Delivery
         </div>
 
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '0.75rem', color: '#ffffff' }}>
-          Discover a hospital, pick a doctor &amp; track your OPD token live.
+        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.18, marginBottom: '0.75rem', color: '#ffffff', maxWidth: '820px' }}>
+          Discover top hospitals, book zero-wait OPD tokens &amp; schedule home medicine delivery.
         </h1>
-        <p style={{ fontSize: '1.05rem', color: '#94a3b8', maxWidth: '720px', fontWeight: 600, lineHeight: 1.5, marginBottom: '1.75rem' }}>
-          Just like you browse restaurants and track food orders — MediQ lets you compare hospital OPD wait times, book slots, and walk in right when your turn arrives.
+        <p style={{ fontSize: '1rem', color: '#cbd5e1', maxWidth: '720px', fontWeight: 600, lineHeight: 1.5, marginBottom: '1.5rem' }}>
+          Compare real-time queue wait times across hospitals, reserve preferred appointment slots, and have prescribed medicines delivered right to your doorstep by certified EV riders.
         </p>
+
+        {/* Floating Stat Badges (Pinterest Style) */}
+        <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
+          {[
+            { icon: '⚡', label: '-84% OPD Queue Wait', color: '#38bdf8' },
+            { icon: '🛵', label: '15-Min Scheduled Rider Delivery', color: '#34d399' },
+            { icon: '💊', label: '70.9% Generic Jan Aushadhi Savings', color: '#fcd34d' },
+            { icon: '🪪', label: 'NHA ABDM ABHA Digital Health Locker', color: '#c084fc' }
+          ].map((st, i) => (
+            <div key={i} style={{
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '2rem',
+              padding: '0.35rem 0.75rem',
+              color: '#ffffff',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              <span>{st.icon}</span>
+              <span style={{ color: st.color }}>{st.label}</span>
+            </div>
+          ))}
+        </div>
 
         {/* Search Bar with Symptom Detection */}
         <div style={{
           display: 'flex',
           gap: '0.75rem',
           background: '#ffffff',
-          padding: '0.5rem',
-          borderRadius: '1rem',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          padding: '0.55rem',
+          borderRadius: '16px',
+          boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
           maxWidth: '820px',
           flexWrap: 'wrap'
         }}>
@@ -290,7 +334,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
             <span style={{ fontSize: '1.25rem' }}>🔍</span>
             <input
               type="text"
-              placeholder="Search by hospital, doctor, specialty or symptoms (e.g. 'rash', 'chest pain', 'fever')..."
+              placeholder="Search by hospital, doctor, specialty or symptoms (e.g. 'fever', 'chest pain', 'knee')..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -318,6 +362,122 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Pinterest Bento Quick-Care Shortcut Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
+        
+        {/* Card 1: Scheduled Rider Delivery */}
+        <div 
+          onClick={() => onNavigateToRole ? onNavigateToRole('fulfillment') : null}
+          style={{
+            background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08) 0%, rgba(16, 185, 129, 0.03) 100%)',
+            border: '1.5px solid rgba(5, 150, 105, 0.35)',
+            borderRadius: '20px',
+            padding: '1.25rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 15px rgba(5, 150, 105, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem'
+          }}
+          className="pinterest-card"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '46px', height: '46px', borderRadius: '14px', background: '#059669', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)' }}>
+              <Bike size={24} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <strong style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>Scheduled Rider Delivery</strong>
+                <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#065f46', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 900 }}>
+                  ⚡ SLOTS
+                </span>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Guaranteed time-slot home drop by EV fleet with secret doorstep OTP.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} color="#059669" />
+        </div>
+
+        {/* Card 2: AI Prescription OCR Scanner */}
+        <div 
+          onClick={() => onNavigateToRole ? onNavigateToRole('ocr') : null}
+          style={{
+            background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(56, 189, 248, 0.03) 100%)',
+            border: '1.5px solid rgba(2, 132, 199, 0.35)',
+            borderRadius: '20px',
+            padding: '1.25rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 15px rgba(2, 132, 199, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem'
+          }}
+          className="pinterest-card"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '46px', height: '46px', borderRadius: '14px', background: '#0284c7', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)' }}>
+              <Scan size={24} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <strong style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>AI Prescription OCR</strong>
+                <span style={{ fontSize: '0.65rem', background: '#e0f2fe', color: '#0369a1', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 900 }}>
+                  AI VISION
+                </span>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Scan handwritten clinic Rx &amp; save 70.9% with Jan Aushadhi generics.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} color="#0284c7" />
+        </div>
+
+        {/* Card 3: ABDM & ABHA Locker */}
+        <div 
+          onClick={() => onNavigateToRole ? onNavigateToRole('abdm') : null}
+          style={{
+            background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(139, 92, 246, 0.03) 100%)',
+            border: '1.5px solid rgba(124, 58, 237, 0.35)',
+            borderRadius: '20px',
+            padding: '1.25rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 15px rgba(124, 58, 237, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem'
+          }}
+          className="pinterest-card"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '46px', height: '46px', borderRadius: '14px', background: '#7c3aed', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(124, 58, 237, 0.35)' }}>
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <strong style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>Ayushman Bharat ABHA</strong>
+                <span style={{ fontSize: '0.65rem', background: '#ede9fe', color: '#5b21b6', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 900 }}>
+                  NHA PVC
+                </span>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                14-digit ABHA card generator, DPDP consent manager &amp; health locker.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} color="#7c3aed" />
+        </div>
+
       </div>
 
       {/* Symptom Quick Routing Bar */}
@@ -430,14 +590,15 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
           return (
             <div
               key={hosp.id}
+              className="pinterest-card"
               style={{
                 background: '#ffffff',
                 border: isCurrentlyActive ? '2.5px solid #0284c7' : '1.5px solid #e2e8f0',
-                borderRadius: '1.25rem',
+                borderRadius: '20px',
                 overflow: 'hidden',
                 boxShadow: isCurrentlyActive 
-                  ? '0 12px 28px -6px rgba(2, 132, 199, 0.25)' 
-                  : '0 4px 16px -2px rgba(15, 23, 42, 0.06)',
+                  ? '0 14px 32px -6px rgba(2, 132, 199, 0.25)' 
+                  : '0 6px 20px -4px rgba(15, 23, 42, 0.06)',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative'
@@ -493,23 +654,25 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId }
                   <span>📍</span> {hosp.distance}
                 </div>
 
-                {/* Live Wait-Time Band Badge */}
+                {/* Live Wait-Time Band Badge with Pinterest Glass Pill */}
                 <div style={{
                   position: 'absolute',
                   bottom: '12px',
                   left: '12px',
-                  background: waitBg,
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(8px)',
                   color: waitColor,
-                  border: `1px solid ${waitColor}40`,
-                  padding: '0.3rem 0.65rem',
-                  borderRadius: '0.5rem',
+                  border: `1.5px solid ${waitColor}60`,
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '2rem',
                   fontWeight: 900,
-                  fontSize: '0.75rem',
+                  fontSize: '0.76rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.35rem'
+                  gap: '0.45rem',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                 }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: waitColor }} />
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: waitColor, boxShadow: `0 0 6px ${waitColor}` }} />
                   <span>~{hosp.avgWaitMinutes}m ({waitBand})</span>
                 </div>
               </div>

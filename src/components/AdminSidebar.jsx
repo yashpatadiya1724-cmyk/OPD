@@ -302,15 +302,17 @@ export default function AdminSidebar({
                         {item.label}
                       </span>
                     )}
-                    {item.badge > 0 && (!isCollapsed || isMobileDrawer) && (
+                    {item.badge && (!isCollapsed || isMobileDrawer) && (
                       <span style={{
-                        background: '#D4AF37',
-                        color: '#0F1117',
-                        fontSize: '0.65rem',
+                        background: typeof item.badge === 'number' ? '#D4AF37' : 'rgba(56, 189, 248, 0.2)',
+                        color: typeof item.badge === 'number' ? '#0F1117' : '#38BDF8',
+                        border: typeof item.badge === 'number' ? 'none' : '1px solid rgba(56, 189, 248, 0.4)',
+                        fontSize: '0.64rem',
                         fontWeight: 900,
-                        padding: '0.1rem 0.4rem',
+                        padding: '0.15rem 0.45rem',
                         borderRadius: '1rem',
-                        marginLeft: 'auto'
+                        marginLeft: 'auto',
+                        letterSpacing: '0.04em'
                       }}>
                         {item.badge}
                       </span>
