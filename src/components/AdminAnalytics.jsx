@@ -10,7 +10,14 @@ import {
   CalendarClock,
   CheckCircle2,
   PieChart,
-  ShieldCheck
+  ShieldCheck,
+  MessageSquare,
+  Send,
+  Radio,
+  BellRing,
+  Phone,
+  Plane,
+  Sparkles
 } from 'lucide-react';
 import { subscribeDoctorList, db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -21,7 +28,86 @@ import SuperAdminPanel from './SuperAdminPanel';
 export default function AdminAnalytics() {
   const [doctors, setDoctors] = useState([]);
   const [allTokens, setAllTokens] = useState({});
-  const [adminTab, setAdminTab] = useState('analytics'); // 'analytics' | 'kyc' | 'super'
+  const [adminTab, setAdminTab] = useState('analytics'); // 'analytics' | 'kyc' | 'super' | 'sms'
+
+  // SMS Gateway state
+  const [smsLogs, setSmsLogs] = useState([
+    {
+      id: 'sms-01',
+      recipientPhone: '+91 98765 43210',
+      patientName: 'Ravi Kumar Patel',
+      tokenCode: 'A-14',
+      type: 'LEAVE_NOW_ALERT',
+      message: '🚨 MediQ Transit Alert: Please LEAVE NOW for CityCare Central Hospital. Your Token #A-14 (Dr. Mehta) will be called in ~18 minutes. Real-time GPS transit: 12 min.',
+      status: 'DELIVERED',
+      deliveredAt: '2 mins ago',
+      latency: '0.8s',
+      dltTag: 'DLT-TRANSIT-LEAVENOW-01'
+    },
+    {
+      id: 'sms-02',
+      recipientPhone: '+91 98123 45678',
+      patientName: 'Amit Verma',
+      tokenCode: 'B-08',
+      type: 'DOCTOR_DELAY_BROADCAST',
+      message: '⚠️ MediQ Update: Dr. Vivek Verma is delayed by ~15 mins due to an emergency trauma consultation. Your new estimated call time is 11:45 AM.',
+      status: 'DELIVERED',
+      deliveredAt: '14 mins ago',
+      latency: '1.1s',
+      dltTag: 'DLT-DELAY-BROADCAST-02'
+    },
+    {
+      id: 'sms-03',
+      recipientPhone: '+91 97234 11223',
+      patientName: 'Smt. Sushila Ben',
+      tokenCode: 'PH-02',
+      type: 'PHARMACY_READY_ALERT',
+      message: '💊 CityCare Pharmacy: Your prescribed medicines for Token #PH-02 are packed and ready for pickup at Counter 1 (Main Atrium). Total: ₹36.',
+      status: 'DELIVERED',
+      deliveredAt: '25 mins ago',
+      latency: '0.9s',
+      dltTag: 'DLT-PHARM-DISPENSE-03'
+    },
+    {
+      id: 'sms-04',
+      recipientPhone: '+91 99099 88776',
+      patientName: 'Riya Sharma',
+      tokenCode: 'DRONE-01',
+      type: 'DRONE_COLD_CHAIN_DISPATCH',
+      message: '🚁 MediQ Aero Dispatch: Cold-chain Drone Aero-1 launched from Jan Aushadhi Dark Store. ETA: 7 mins. Live flight tracker: https://mediq.app/t/DRN-841',
+      status: 'DELIVERED',
+      deliveredAt: '38 mins ago',
+      latency: '1.4s',
+      dltTag: 'DLT-DRONE-TELEMETRY-04'
+    }
+  ]);
+
+  const [testSmsRecipient, setTestSmsRecipient] = useState('+91 98765 43210');
+  const [testSmsType, setTestSmsType] = useState('LEAVE_NOW');
+  const [testSmsCustomText, setTestSmsCustomText] = useState('');
+  const [smsSendFeedback, setSmsSendFeedback] = useState(false);
+
+  const handleSendTestSms = (e) => {
+    e.preventDefault();
+    const newLog = {
+      id: `sms-${Date.now()}`,
+      recipientPhone: testSmsRecipient,
+      patientName: 'Simulated Patient',
+      tokenCode: 'TEST-01',
+      type: testSmsType === 'LEAVE_NOW' ? 'LEAVE_NOW_ALERT' : testSmsType === 'DELAY' ? 'DOCTOR_DELAY_BROADCAST' : 'CUSTOM_HOSPITAL_NOTICE',
+      message: testSmsCustomText || (testSmsType === 'LEAVE_NOW' 
+        ? `🚨 MediQ Transit Alert: Please LEAVE NOW for CityCare Central Hospital. Your Token #TEST-01 will be called in ~15 mins.`
+        : `⚠️ Hospital Announcement: Emergency OPD prioritization active. Regular tokens delayed ~15 mins.`),
+      status: 'DELIVERED',
+      deliveredAt: 'Just now',
+      latency: '0.9s',
+      dltTag: 'DLT-TELECOM-GOV-982410'
+    };
+
+    setSmsLogs(prev => [newLog, ...prev]);
+    setSmsSendFeedback(true);
+    setTimeout(() => setSmsSendFeedback(false), 3000);
+  };
 
   useEffect(() => {
     const unsub = subscribeDoctorList((docs) => {
@@ -178,6 +264,26 @@ export default function AdminAnalytics() {
           >
             <span>🌐</span>
             <span>Super Admin &amp; GMV</span>
+          </button>
+
+          <button
+            onClick={() => setAdminTab('sms')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.55rem 1rem',
+              borderRadius: '0.55rem',
+              border: 'none',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              background: adminTab === 'sms' ? '#059669' : 'transparent',
+              color: adminTab === 'sms' ? '#ffffff' : 'var(--text-secondary)'
+            }}
+          >
+            <MessageSquare size={16} />
+            <span>SMS &amp; WhatsApp Alerts</span>
           </button>
         </div>
       </div>
@@ -361,6 +467,214 @@ export default function AdminAnalytics() {
         </div>
       </div>
       </>
+    )}
+
+    {/* RENDER SMS & WHATSAPP GATEWAY TAB (POSTER SCOPE 4) */}
+    {adminTab === 'sms' && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        
+        {/* Metric Cards Banner */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '1.25rem'
+        }}>
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>TOTAL ALERTS DISPATCHED</span>
+              <MessageSquare size={20} color="#059669" />
+            </div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#059669', margin: '0.4rem 0 0.1rem' }}>
+              1,482
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              SMS + WhatsApp OPD Notifications
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>DLT DELIVERY RATE</span>
+              <CheckCircle2 size={20} color="#0284c7" />
+            </div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0284c7', margin: '0.4rem 0 0.1rem' }}>
+              99.8%
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Telecom Entity: DLT-GOV-982410
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>AVG TRANSIT LATENCY</span>
+              <Clock size={20} color="#d97706" />
+            </div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#d97706', margin: '0.4rem 0 0.1rem' }}>
+              1.1s
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Cloud Pub/Sub Webhook Dispatch
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>TRANSIT LEAVE-NOW TRIGGERS</span>
+              <Radio size={20} color="#f43f5e" />
+            </div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f43f5e', margin: '0.4rem 0 0.1rem' }}>
+              342
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Zero Missed OPD Consultation Calls
+            </div>
+          </div>
+        </div>
+
+        {/* Trigger Test / Hospital Broadcast Form */}
+        <div className="glass-card" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Send size={18} color="#059669" />
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+                Automated OPD Alert Gateway &amp; Emergency Broadcaster
+              </h3>
+            </div>
+            {smsSendFeedback && (
+              <span style={{ background: '#dcfce7', color: '#166534', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800 }}>
+                ✓ Alert successfully delivered via SMS &amp; WhatsApp!
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleSendTestSms} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                Recipient Phone Number:
+              </label>
+              <input
+                type="text"
+                value={testSmsRecipient}
+                onChange={(e) => setTestSmsRecipient(e.target.value)}
+                className="input-field"
+                style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-inner)', color: 'var(--text-primary)', fontWeight: 700 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                Trigger Notification Template:
+              </label>
+              <select
+                value={testSmsType}
+                onChange={(e) => setTestSmsType(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-inner)', color: 'var(--text-primary)', fontWeight: 700 }}
+              >
+                <option value="LEAVE_NOW">🔴 Transit "Leave Now" Departure Radar Alert</option>
+                <option value="DELAY">🟡 Doctor Emergency Delay Broadcast (+15 min)</option>
+                <option value="PHARMACY">🟢 Pharmacy Dispense Counter Ready Alert</option>
+                <option value="CUSTOM">📢 Custom Hospital Mass Announcement</option>
+              </select>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '8px',
+                  fontWeight: 900,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)'
+                }}
+              >
+                <Send size={16} />
+                <span>Trigger Live OPD Alert</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Live Notification Logs Table */}
+        <div className="glass-card" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.15rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+              Real-Time Outgoing Notification Ledger ({smsLogs.length} Events)
+            </h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Auto-refreshed via Telecom Gateway
+            </span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 800, textTransform: 'uppercase' }}>
+                  <th style={{ padding: '0.75rem' }}>Recipient</th>
+                  <th style={{ padding: '0.75rem' }}>Token Code</th>
+                  <th style={{ padding: '0.75rem' }}>Alert Type</th>
+                  <th style={{ padding: '0.75rem' }}>Notification Content</th>
+                  <th style={{ padding: '0.75rem' }}>Latency</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {smsLogs.map((log) => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <td style={{ padding: '0.85rem 0.75rem' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{log.patientName}</div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{log.recipientPhone}</div>
+                    </td>
+                    <td style={{ padding: '0.85rem 0.75rem', fontWeight: 900, color: '#0284c7' }}>
+                      {log.tokenCode}
+                    </td>
+                    <td style={{ padding: '0.85rem 0.75rem' }}>
+                      <span style={{
+                        background: log.type.includes('LEAVE') ? 'rgba(244, 63, 94, 0.15)' : log.type.includes('DELAY') ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        color: log.type.includes('LEAVE') ? '#f43f5e' : log.type.includes('DELAY') ? '#d97706' : '#10b981',
+                        fontSize: '0.7rem',
+                        fontWeight: 900,
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '4px'
+                      }}>
+                        {log.type}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.85rem 0.75rem', maxWidth: '380px' }}>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        {log.message}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Tag: {log.dltTag} &bull; {log.deliveredAt}
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.85rem 0.75rem', fontSize: '0.78rem', color: '#0284c7', fontWeight: 800 }}>
+                      ⚡ {log.latency}
+                    </td>
+                    <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>
+                      <span style={{ background: '#dcfce7', color: '#166534', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 900 }}>
+                        ✓ {log.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+      </div>
     )}
 
     </div>

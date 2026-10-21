@@ -15,7 +15,9 @@ import {
   FileText,
   DoorOpen,
   Pill,
-  Send
+  Send,
+  Scan,
+  Camera
 } from 'lucide-react';
 import { 
   subscribeDoctorList, 
@@ -23,8 +25,15 @@ import {
   updateDoctorLocation, 
   updateTokenStatus, 
   toggleDoctorQueuePause,
+  pauseDoctorQueue,
+  skipToken,
+  recallToken,
+  sortQueueByPriority,
+  checkMedicineStock,
+  MEDICINE_INVENTORY,
   createPharmacyToken,
-  getPharmacyPriceComparison
+  getPharmacyPriceComparison,
+  logAuditEvent
 } from '../firebase';
 import { playChime } from '../utils/audio';
 
@@ -44,16 +53,37 @@ export default function DoctorDashboard() {
   // Consultation elapsed timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // PRD v4 Section 6.6: 3-Minute Response Window Countdown Timer
+  const [responseCountdown, setResponseCountdown] = useState(180);
+
+  // Skip Modal state (moves 3 back, second miss = no-show)
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [skipReason, setSkipReason] = useState('Patient absent outside room after 3-minute window');
+
+  // Pause Queue Modal state (PRD 6.7)
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseReason, setPauseReason] = useState('Emergency surgery / procedure');
+  const [pauseDelayMinutes, setPauseDelayMinutes] = useState(30);
+
   // Section 7.10 & 7.11: Pharmacy Handoff Modal & Price Comparison state
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [prescribedMedicinesText, setPrescribedMedicinesText] = useState('Paracetamol 650mg, Cetirizine 10mg, Pantoprazole 40mg');
   const [selectedPharmacyId, setSelectedPharmacyId] = useState('pharm-hospital');
   const [sendToPharmacy, setSendToPharmacy] = useState(true);
+  const [allowGenericSubstitution, setAllowGenericSubstitution] = useState(true);
+  const [allergyAlert, setAllergyAlert] = useState(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [pharmacyHandoffSuccess, setPharmacyHandoffSuccess] = useState(null);
 
   const handleOpenCompleteModal = () => {
     if (!currentToken) return;
+    // Check allergy warnings against patient reason/known profile
+    const meds = prescribedMedicinesText.toLowerCase();
+    if (currentToken.reason?.toLowerCase().includes('penicillin') && meds.includes('amox')) {
+      setAllergyAlert('⚠️ WARNING: Patient reported Penicillin allergy. Amoxicillin is a Penicillin antibiotic!');
+    } else {
+      setAllergyAlert(null);
+    }
     setShowCompleteModal(true);
   };
 
@@ -78,6 +108,7 @@ export default function DoctorDashboard() {
           doctorName: activeDoctor?.name || 'Dr. Physician',
           linkedDoctorTokenId: currentToken.id,
           medicines: medList,
+          allowGenericSubstitution,
           hospitalId: activeDoctor?.hospitalId || 'citycare-central',
           hospitalName: activeDoctor?.hospitalName || 'CityCare Central Hospital',
           pharmacyId: chosenPharm.id,
@@ -93,7 +124,8 @@ export default function DoctorDashboard() {
         prescribedMedicines: medList,
         pharmacyTokenCode: pharmacyResult?.tokenCode || null,
         pharmacyName: chosenPharm?.name || null,
-        pharmacyStatus: pharmacyResult?.status || 'ready'
+        pharmacyStatus: pharmacyResult?.status || 'ready',
+        genericSubstitutionAllowed: allowGenericSubstitution
       });
 
       if (pharmacyResult) {
@@ -115,15 +147,77 @@ export default function DoctorDashboard() {
 
   const handleMarkComplete = handleOpenCompleteModal;
 
-  const handleSkip = async () => {
-    if (!selectedDocId || !currentToken) return;
-    await updateTokenStatus(selectedDocId, currentToken.id, 'skipped');
+  const handleSkipPrompt = () => {
+    if (!currentToken) return;
+    setShowSkipModal(true);
   };
 
-  const handleTogglePause = async () => {
-    if (!activeDoctor) return;
-    await toggleDoctorQueuePause(activeDoctor.id, !activeDoctor.queuePaused);
+  const handleConfirmSkip = async () => {
+    if (!selectedDocId || !currentToken) return;
+    try {
+      const res = await skipToken(selectedDocId, currentToken.id, skipReason);
+      setShowSkipModal(false);
+      if (res.status === 'no-show') {
+        alert(`Token #${currentToken.tokenNumber} has been closed as NO-SHOW (second response window missed).`);
+      } else {
+        alert(`Token #${currentToken.tokenNumber} skipped and moved 3 positions back in queue.`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Skip error: ' + e.message);
+    }
   };
+
+  const handleRecall = async (token) => {
+    if (!selectedDocId || !token) return;
+    try {
+      await recallToken(selectedDocId, token.id, activeDoctor?.name || 'Doctor');
+      alert(`Token #${token.tokenNumber} recalled to active waiting queue.`);
+    } catch (e) {
+      console.error(e);
+      alert('Recall error: ' + e.message);
+    }
+  };
+
+  const handleConfirmPause = async () => {
+    if (!activeDoctor) return;
+    try {
+      await pauseDoctorQueue(activeDoctor.id, {
+        paused: true,
+        reason: pauseReason,
+        delayMinutes: Number(pauseDelayMinutes) || 30
+      });
+      setShowPauseModal(false);
+      alert(`Queue paused. Live delay notice (${pauseDelayMinutes}m) broadcast to all patient screens & waiting room TVs.`);
+    } catch (e) {
+      console.error(e);
+      alert('Pause error: ' + e.message);
+    }
+  };
+
+  const handleResumeQueue = async () => {
+    if (!activeDoctor) return;
+    try {
+      await pauseDoctorQueue(activeDoctor.id, {
+        paused: false,
+        reason: '',
+        delayMinutes: 0
+      });
+      alert('Queue resumed. Live consultation status restored.');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleTogglePause = () => {
+    if (activeDoctor?.queuePaused) {
+      handleResumeQueue();
+    } else {
+      setShowPauseModal(true);
+    }
+  };
+
+  const handleSkip = handleSkipPrompt;
 
   const isApproved = activeDoctor?.status === 'approved' || !activeDoctor?.status;
   useEffect(() => {
@@ -151,14 +245,15 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (!selectedDocId) return;
     const unsub = subscribeDoctorTokens(selectedDocId, (tList) => {
-      tList.sort((a, b) => (a.tokenNumber || 0) - (b.tokenNumber || 0));
-      setTokens(tList);
+      const sorted = sortQueueByPriority(tList);
+      setTokens(sorted);
     });
     return () => unsub();
   }, [selectedDocId]);
 
   const currentToken = tokens.find(t => t.status === 'in-progress');
-  const waitingTokens = tokens.filter(t => t.status === 'waiting');
+  const waitingTokens = sortQueueByPriority(tokens.filter(t => t.status === 'waiting'));
+  const skippedTokens = tokens.filter(t => t.status === 'skipped' || t.status === 'no-show');
   const completedCount = tokens.filter(t => t.status === 'completed').length;
 
   useEffect(() => {
@@ -173,6 +268,22 @@ export default function DoctorDashboard() {
     }
     return () => {
       if (interval) clearInterval(interval);
+    };
+  }, [currentToken?.id]);
+
+  // PRD 6.6: 3-minute response countdown timer
+  useEffect(() => {
+    let timer = null;
+    if (currentToken) {
+      setResponseCountdown(180);
+      timer = setInterval(() => {
+        setResponseCountdown(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    } else {
+      setResponseCountdown(180);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
     };
   }, [currentToken?.id]);
 
@@ -429,7 +540,7 @@ export default function DoctorDashboard() {
           justifyContent: 'space-between'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span className="pulse-dot" style={{ background: currentToken ? '#10b981' : '#94a3b8' }}></span>
                 <h3 style={{ fontSize: '0.92rem', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -437,23 +548,61 @@ export default function DoctorDashboard() {
                 </h3>
               </div>
               {currentToken && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  background: 'var(--badge-comp-bg)',
-                  color: 'var(--badge-comp-text)',
-                  padding: '0.35rem 0.85rem',
-                  borderRadius: '9999px',
-                  fontFamily: 'monospace',
-                  fontSize: '1rem',
-                  fontWeight: 900
-                }}>
-                  <Clock size={16} />
-                  <span>{formatTimer(elapsedSeconds)}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {/* PRD 6.6: 3-Minute Response Window Timer */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    background: responseCountdown > 30 ? '#eff6ff' : '#fef2f2',
+                    color: responseCountdown > 30 ? '#1d4ed8' : '#b91c1c',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '9999px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    fontWeight: 900,
+                    border: responseCountdown > 30 ? '1px solid #bfdbfe' : '1px solid #fca5a5'
+                  }}>
+                    <Clock size={14} />
+                    <span>Response: {formatTimer(responseCountdown)}</span>
+                  </div>
+
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: 'var(--badge-comp-bg)',
+                    color: 'var(--badge-comp-text)',
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '9999px',
+                    fontFamily: 'monospace',
+                    fontSize: '1rem',
+                    fontWeight: 900
+                  }}>
+                    <Clock size={16} />
+                    <span>{formatTimer(elapsedSeconds)}</span>
+                  </div>
                 </div>
               )}
             </div>
+
+            {currentToken && responseCountdown === 0 && (
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #f87171',
+                borderRadius: '8px',
+                padding: '0.6rem 0.85rem',
+                marginBottom: '0.85rem',
+                fontSize: '0.82rem',
+                color: '#991b1b',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span>⚠️ 3-Minute patient response window expired outside room. Recommend: Tap "Skip Patient" to move 3 positions back.</span>
+              </div>
+            )}
 
             {currentToken ? (
               <div style={{ textAlign: 'center', padding: '1rem 0 1.5rem' }}>
@@ -590,7 +739,7 @@ export default function DoctorDashboard() {
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{
                       fontSize: '1.3rem',
                       fontWeight: 900,
@@ -603,6 +752,31 @@ export default function DoctorDashboard() {
                         Next
                       </span>
                     )}
+                    {t.lane === 'emergency' && (
+                      <span style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #f87171', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 900 }}>
+                        🚨 Emergency
+                      </span>
+                    )}
+                    {t.lane === 'senior' && (
+                      <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 900 }}>
+                        👴 Senior
+                      </span>
+                    )}
+                    {t.lane === 'pregnant' && (
+                      <span style={{ background: '#fce7f3', color: '#9d174d', border: '1px solid #fbcfe8', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 900 }}>
+                        🤰 Priority
+                      </span>
+                    )}
+                    {t.lane === 'disabled' && (
+                      <span style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 900 }}>
+                        ♿ Priority
+                      </span>
+                    )}
+                    {t.type === 'slot' && (
+                      <span style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 900 }}>
+                        📅 Slot ({t.slotTime || 'Booked'})
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.2rem' }}>
                     {t.patientName}
@@ -610,6 +784,11 @@ export default function DoctorDashboard() {
                   <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                     Phone: {t.phoneNumber}
                   </div>
+                  {t.skipCount > 0 && (
+                    <div style={{ fontSize: '0.74rem', color: '#b45309', fontWeight: 700, marginTop: '2px' }}>
+                      ⚠️ Previously skipped ({t.skipCount}/2) — Moved back
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -630,6 +809,62 @@ export default function DoctorDashboard() {
           </div>
         )}
       </div>
+
+      {/* PRD 6.6: SKIPPED & NO-SHOW TOKENS WITH RECALL ACTION */}
+      {skippedTokens.length > 0 && (
+        <div className="glass-card" style={{ marginTop: '1.5rem', padding: '1.5rem', background: '#fffbeb', border: '1px solid #fde68a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <SkipForward size={20} color="#b45309" />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 900, color: '#92400e', margin: 0 }}>
+                Skipped &amp; Missed Response Tokens ({skippedTokens.length}) — PRD 6.6 Recall Allowed
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#78350f', fontWeight: 700 }}>
+              Doctor / Desk can recall tokens back to active queue until end of day
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
+            {skippedTokens.map(st => (
+              <div key={st.id} style={{
+                background: '#ffffff',
+                border: '1px solid #fcd34d',
+                borderRadius: '10px',
+                padding: '0.85rem 1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#b45309' }}>#{st.tokenNumber}</span>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 900,
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '4px',
+                      background: st.status === 'no-show' ? '#fee2e2' : '#fef3c7',
+                      color: st.status === 'no-show' ? '#991b1b' : '#92400e'
+                    }}>
+                      {st.status === 'no-show' ? 'NO-SHOW (CLOSED)' : 'SKIPPED (ABSENT)'}
+                    </span>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{st.patientName}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Reason: {st.skipReason || 'Absent outside room'}</div>
+                </div>
+                <button
+                  onClick={() => handleRecall(st)}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem', fontWeight: 800, borderColor: '#f59e0b', color: '#92400e' }}
+                >
+                  Recall Token
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* SECTION 7.10: Auto Pharmacy Token Handoff Modal */}
       {showCompleteModal && currentToken && (
@@ -690,9 +925,33 @@ export default function DoctorDashboard() {
                 <label style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)' }}>
                   💊 Prescribed Medicines (Add / Edit):
                 </label>
-                <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700 }}>
-                  {prescribedMedicinesText.split(',').filter(m => m.trim()).length} Items Added
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrescribedMedicinesText('Augmentin 625mg (1 Tab TDS x 5d), Dolo 650mg (1 Tab SOS), Pantocid 40mg (1 Tab OD AC), Cetzine 10mg (1 Tab HS)');
+                    }}
+                    style={{
+                      background: 'rgba(2, 132, 199, 0.1)',
+                      border: '1px solid #38bdf8',
+                      color: '#0284c7',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <Scan size={13} />
+                    <span>📷 AI Vision OCR Scan</span>
+                  </button>
+                  <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700 }}>
+                    {prescribedMedicinesText.split(',').filter(m => m.trim()).length} Items Added
+                  </span>
+                </div>
               </div>
               <textarea
                 value={prescribedMedicinesText}
@@ -898,6 +1157,215 @@ export default function DoctorDashboard() {
                 ⚡ 0 Queue at Counter — Automatically Packed &amp; Ready for Pickup!
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* PRD 6.6: SKIP PATIENT MODAL */}
+      {showSkipModal && currentToken && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }} onClick={() => setShowSkipModal(false)}>
+          <div className="glass-card" style={{
+            background: '#fff',
+            maxWidth: '500px',
+            width: '100%',
+            padding: '1.75rem',
+            borderRadius: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                background: '#fee2e2',
+                color: '#b91c1c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <SkipForward size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                  Skip Token #{currentToken.tokenNumber} ({currentToken.patientName})
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: '#b91c1c', fontWeight: 700 }}>
+                  PRD 6.6 Logic: Moves 3 positions back. (Miss #{(currentToken.skipCount || 0) + 1}/2)
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
+              Patient has missed their 3-minute response window outside the room. If this is their 2nd consecutive missed call, their token will be automatically closed as <strong>NO-SHOW</strong>.
+            </p>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+                Reason for Skipping:
+              </label>
+              <select
+                className="input-field"
+                value={skipReason}
+                onChange={e => setSkipReason(e.target.value)}
+                style={{ width: '100%', marginBottom: '0.5rem' }}
+              >
+                <option value="Patient absent outside room after 3-minute window">Patient absent outside room after 3-minute window</option>
+                <option value="Stepped away for diagnostic testing (X-Ray/Lab)">Stepped away for diagnostic testing (X-Ray/Lab)</option>
+                <option value="Patient requested 10-minute postponement">Patient requested 10-minute postponement</option>
+                <option value="Vitals or triage assessment in progress">Vitals or triage assessment in progress</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowSkipModal(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.65rem 1.25rem', fontWeight: 800 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSkip}
+                className="btn btn-danger"
+                style={{ padding: '0.65rem 1.5rem', fontWeight: 900 }}
+              >
+                Confirm Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRD 6.7: PAUSE QUEUE / DOCTOR DELAY MODAL */}
+      {showPauseModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }} onClick={() => setShowPauseModal(false)}>
+          <div className="glass-card" style={{
+            background: '#fff',
+            maxWidth: '520px',
+            width: '100%',
+            padding: '1.75rem',
+            borderRadius: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                background: '#fef3c7',
+                color: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Pause size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                  Pause Consultation Queue &amp; Broadcast Delay
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 700 }}>
+                  PRD 6.7: Broadcasts live alert to patients &amp; waiting room TV
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+                Reason for Delay:
+              </label>
+              <select
+                className="input-field"
+                value={pauseReason}
+                onChange={e => setPauseReason(e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <option value="Emergency surgery / emergency procedure">Emergency surgery / procedure</option>
+                <option value="Inpatient ICU ward rounds">Inpatient ICU ward rounds</option>
+                <option value="Doctor running 30 min late">Doctor running late</option>
+                <option value="Scheduled clinical break">Scheduled clinical break</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+                Expected Delay Duration (Minutes):
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {[15, 30, 45, 60].map(mins => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setPauseDelayMinutes(mins)}
+                    style={{
+                      flex: 1,
+                      padding: '0.6rem',
+                      borderRadius: '8px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: pauseDelayMinutes === mins ? '2px solid #d97706' : '1px solid var(--border-subtle)',
+                      background: pauseDelayMinutes === mins ? '#fef3c7' : '#f8fafc',
+                      color: pauseDelayMinutes === mins ? '#92400e' : 'var(--text-main)'
+                    }}
+                  >
+                    {mins} min
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              padding: '0.75rem 1rem',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              color: 'var(--text-muted)',
+              marginBottom: '1.25rem'
+            }}>
+              📢 <strong>Patient Impact:</strong> Patients will receive an in-app notice with options to <em>Stay &amp; Wait</em>, <em>Switch Doctor (same specialty)</em>, or <em>Reschedule Free of Cost</em>.
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowPauseModal(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.65rem 1.25rem', fontWeight: 800 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPause}
+                className="btn btn-primary"
+                style={{ padding: '0.65rem 1.5rem', fontWeight: 900, background: '#d97706', borderColor: '#b45309' }}
+              >
+                Broadcast Delay &amp; Pause
+              </button>
+            </div>
           </div>
         </div>
       )}

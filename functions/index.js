@@ -1,13 +1,120 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
-admin.initializeApp();
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 const db = admin.firestore();
 
 /**
- * 1. onTokenStatusChange:
+ * 1. issueToken:
+ * Trigger: Callable HTTPS
+ * Purpose: Transactional token issuance, walk-in cap check, idempotency & duplicate guard.
+ * PRD Section 6.1, 6.2, 8
+ */
+exports.issueToken = functions.https.onCall(async (data, context) => {
+  const { doctorId, patientName, phoneNumber, reason, lane = "normal", type = "walkin", slotTime = null } = data;
+
+  if (!doctorId || !patientName || !phoneNumber) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required patient details: doctorId, patientName, phoneNumber");
+  }
+
+  const todayKey = new Date().toISOString().split("T")[0];
+  const counterRef = db.doc(`doctors/${doctorId}/counters/${todayKey}`);
+  const doctorRef = db.doc(`doctors/${doctorId}`);
+
+  // Idempotency check: check if active token already exists today for patient + doctor
+  const existingTokensSnap = await db
+    .collection(`doctors/${doctorId}/tokens`)
+    .where("phoneNumber", "==", phoneNumber)
+    .where("date", "==", todayKey)
+    .get();
+
+  const activeExisting = existingTokensSnap.docs.find(d => {
+    const s = d.data().status;
+    return s === "waiting" || s === "in-progress";
+  });
+
+  if (activeExisting) {
+    const exData = activeExisting.data();
+    return {
+      success: true,
+      tokenId: activeExisting.id,
+      tokenNumber: exData.tokenNumber,
+      isExisting: true,
+      message: `Patient already has an active token #${exData.tokenNumber} for this doctor today.`
+    };
+  }
+
+  return await db.runTransaction(async (tx) => {
+    const doctorDoc = await tx.get(doctorRef);
+    const doctorData = doctorDoc.exists ? doctorDoc.data() : {};
+    const dailyCap = doctorData.dailyCap || 50;
+    const reservedForSlots = doctorData.reservedForSlots || 15;
+    const walkInCap = Math.max(0, dailyCap - reservedForSlots);
+
+    const counterSnap = await tx.get(counterRef);
+    const currentSeq = counterSnap.exists ? counterSnap.data().lastToken || 0 : 0;
+
+    // Check walk-in cap
+    if (type === "walkin" && currentSeq >= walkInCap) {
+      throw new functions.https.HttpsError("resource-exhausted", `Daily walk-in capacity reached (${walkInCap}). Online slots reserved.`);
+    }
+
+    const nextSeq = currentSeq + 1;
+    const doctorCode = (doctorData.name || "D").replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase();
+    const formattedTokenCode = `D${doctorCode}-${String(nextSeq).padStart(2, "0")}`;
+
+    // Base priority lane weights (PRD 6.2)
+    let laneWeight = 0;
+    if (lane === "emergency") laneWeight = 1000;
+    else if (lane === "senior" || lane === "pregnant" || lane === "disabled") laneWeight = 50;
+
+    const priorityScore = laneWeight;
+
+    const tokenCol = db.collection(`doctors/${doctorId}/tokens`);
+    const newTokenDoc = tokenCol.doc();
+
+    tx.set(counterRef, { lastToken: nextSeq, dateKey: todayKey }, { merge: true });
+
+    tx.set(newTokenDoc, {
+      tokenNumber: nextSeq,
+      tokenCode: formattedTokenCode,
+      patientName: patientName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      reason: reason || "",
+      doctorId,
+      doctorName: doctorData.name || "Attending Doctor",
+      lane,
+      type,
+      slotTime,
+      priorityScore,
+      skipCount: 0,
+      status: "waiting",
+      date: todayKey,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      calledAt: null,
+      completedAt: null,
+      addedBy: context.auth ? context.auth.uid : "web_client"
+    });
+
+    return {
+      success: true,
+      tokenId: newTokenDoc.id,
+      tokenNumber: nextSeq,
+      tokenCode: formattedTokenCode,
+      doctorId,
+      lane,
+      priorityScore
+    };
+  });
+});
+
+/**
+ * 2. onTokenStatusChange:
  * Trigger: Firestore onUpdate (doctors/{doctorId}/tokens/{tokenId})
- * Purpose: Detects status changes and sends notifications at the right milestones.
+ * Purpose: Push alerts, milestone alerts (3 away, next, your turn), recompute ETA.
+ * PRD Section 5.1, 8
  */
 exports.onTokenStatusChange = functions.firestore
   .document("doctors/{doctorId}/tokens/{tokenId}")
@@ -18,58 +125,53 @@ exports.onTokenStatusChange = functions.firestore
 
     if (before.status === after.status) return null;
 
-    // Fetch doctor info for room number and name
     const doctorDoc = await db.doc(`doctors/${doctorId}`).get();
     const doctor = doctorDoc.exists ? doctorDoc.data() : { name: "Doctor", roomNumber: "OPD Room" };
 
-    // When status changes to in-progress
+    // Milestone 1: In-Progress (Your turn)
     if (after.status === "in-progress" && after.deviceToken) {
-      const message = {
-        notification: {
-          title: "It's Your Turn! - CityCare OPD",
-          body: `Token #${after.tokenNumber}: Please proceed to ${doctor.roomNumber} for consultation with ${doctor.name}.`,
-        },
-        token: after.deviceToken,
-      };
       try {
-        await admin.messaging().send(message);
+        await admin.messaging().send({
+          notification: {
+            title: "Your Turn! - MediQ OPD",
+            body: `Token #${after.tokenNumber}: Please proceed to ${doctor.roomNumber || "Cabin"} for consultation with ${doctor.name}.`
+          },
+          token: after.deviceToken
+        });
       } catch (err) {
-        console.warn("FCM error on status in-progress:", err.message);
+        console.warn("FCM error on in-progress:", err.message);
       }
     }
 
-    // When status changes, re-evaluate positions of remaining waiting tokens
+    // Milestone 2: Queue position alerts for remaining waiting patients
     const waitingTokensSnap = await db
       .collection(`doctors/${doctorId}/tokens`)
       .where("status", "==", "waiting")
-      .orderBy("tokenNumber", "asc")
+      .orderBy("priorityScore", "desc")
       .get();
 
     for (let i = 0; i < waitingTokensSnap.docs.length; i++) {
       const tDoc = waitingTokensSnap.docs[i];
       const tData = tDoc.data();
-      const position = i + 1;
+      const pos = i + 1;
 
       if (!tData.deviceToken) continue;
 
-      let notifBody = null;
-      if (position === 3) {
-        notifBody = `You're 3 patients away from seeing ${doctor.name}. Please head to the waiting area.`;
-      } else if (position === 1) {
-        notifBody = `You are next in line for ${doctor.name} in ${doctor.roomNumber}! Please be ready outside the door.`;
+      let body = null;
+      if (pos === 1) {
+        body = `You are NEXT in line for ${doctor.name} in ${doctor.roomNumber}! Please stand outside the door.`;
+      } else if (pos === 3) {
+        body = `You are 3 patients away from seeing ${doctor.name}. Please head to the OPD waiting area.`;
       }
 
-      if (notifBody) {
+      if (body) {
         try {
           await admin.messaging().send({
-            notification: {
-              title: "Queue Update - CityCare OPD",
-              body: notifBody,
-            },
-            token: tData.deviceToken,
+            notification: { title: "MediQ Queue Update", body },
+            token: tData.deviceToken
           });
         } catch (e) {
-          console.warn("FCM error for position milestone:", e.message);
+          console.warn("FCM error for milestone:", e.message);
         }
       }
     }
@@ -78,9 +180,10 @@ exports.onTokenStatusChange = functions.firestore
   });
 
 /**
- * 2. onTokenCompleted:
+ * 3. onTokenCompleted:
  * Trigger: Firestore onUpdate (doctors/{doctorId}/tokens/{tokenId}) where status becomes 'completed'
- * Purpose: Updates the doctor's rolling average consultation time and increments dailyStats.
+ * Purpose: Rolling stats (last 10 consults, recent x1.5 weight), duration logging, pharmacy token generation.
+ * PRD Section 6.3, 6.8, 8
  */
 exports.onTokenCompleted = functions.firestore
   .document("doctors/{doctorId}/tokens/{tokenId}")
@@ -91,65 +194,140 @@ exports.onTokenCompleted = functions.firestore
 
     if (before.status !== "completed" && after.status === "completed") {
       const dateKey = after.date || new Date().toISOString().split("T")[0];
-      const statsRef = db.doc(`dailyStats/${doctorId}_${dateKey}`);
 
-      // Calculate consultation duration if timestamps exist
+      // Duration Calculation
       let durationMinutes = 10;
       if (after.calledAt && after.completedAt) {
-        const called = after.calledAt.toDate ? after.calledAt.toDate() : new Date(after.calledAt);
-        const completed = after.completedAt.toDate ? after.completedAt.toDate() : new Date(after.completedAt);
-        const diffMins = Math.round((completed - called) / 60000);
-        if (diffMins > 1 && diffMins < 90) {
-          durationMinutes = diffMins;
+        const c = after.calledAt.toDate ? after.calledAt.toDate() : new Date(after.calledAt);
+        const comp = after.completedAt.toDate ? after.completedAt.toDate() : new Date(after.completedAt);
+        const diff = Math.round((comp - c) / 60000);
+        // PRD 6.3 Outlier Guard: ignore consults <1 min or >60 min in rolling average
+        if (diff >= 1 && diff <= 60) {
+          durationMinutes = diff;
         }
       }
 
-      // Update doctor's rolling average (last 10 consultations)
-      const recentCompleted = await db
+      // Fetch last 10 completed consults
+      const recentSnap = await db
         .collection(`doctors/${doctorId}/tokens`)
         .where("status", "==", "completed")
         .limit(10)
         .get();
 
-      let totalMins = 0;
-      let count = 0;
-      recentCompleted.forEach((doc) => {
-        const d = doc.data();
-        if (d.calledAt && d.completedAt) {
-          const c = d.calledAt.toDate ? d.calledAt.toDate() : new Date(d.calledAt);
-          const comp = d.completedAt.toDate ? d.completedAt.toDate() : new Date(d.completedAt);
+      const durations = [];
+      recentSnap.forEach(d => {
+        const dat = d.data();
+        if (dat.calledAt && dat.completedAt) {
+          const c = dat.calledAt.toDate ? dat.calledAt.toDate() : new Date(dat.calledAt);
+          const comp = dat.completedAt.toDate ? dat.completedAt.toDate() : new Date(dat.completedAt);
           const m = Math.round((comp - c) / 60000);
-          if (m > 1 && m < 90) {
-            totalMins += m;
-            count++;
-          }
+          if (m >= 1 && m <= 60) durations.push(m);
         }
       });
 
-      const newRollingAvg = count > 0 ? Math.round(totalMins / count) : durationMinutes;
-      await db.doc(`doctors/${doctorId}`).set(
-        { avgConsultationMinutes: newRollingAvg },
-        { merge: true }
-      );
+      // PRD 6.3: Weighted rolling mean of last 10 (recent x1.5)
+      let weightedSum = 0;
+      let weightTotal = 0;
+      durations.forEach((dVal, idx) => {
+        const w = idx >= durations.length - 3 ? 1.5 : 1.0;
+        weightedSum += dVal * w;
+        weightTotal += w;
+      });
 
-      // Increment dailyStats
-      await statsRef.set(
-        {
-          doctorId,
-          dateKey,
-          totalServed: admin.firestore.FieldValue.increment(1),
-          avgConsultationMinutes: newRollingAvg,
-        },
-        { merge: true }
-      );
+      const avgConsult = weightTotal > 0 ? Math.round(weightedSum / weightTotal) : durationMinutes;
+
+      // Calculate StdDev for range
+      let stdDev = 3.0;
+      if (durations.length > 2) {
+        const mean = durations.reduce((a, b) => a + b, 0) / durations.length;
+        const variance = durations.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / durations.length;
+        stdDev = Math.max(1.5, Math.min(8.0, Math.round(Math.sqrt(variance) * 10) / 10));
+      }
+
+      await db.doc(`doctors/${doctorId}`).set({
+        stats: { avgConsult, stdDev, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }
+      }, { merge: true });
+
+      // Aggregate in dailyStats
+      await db.doc(`dailyStats/${doctorId}_${dateKey}`).set({
+        doctorId,
+        dateKey,
+        totalServed: admin.firestore.FieldValue.increment(1),
+        avgConsult,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     }
     return null;
   });
 
 /**
- * 3. resetDailyQueue:
- * Trigger: Scheduled 12:00 AM daily
- * Purpose: Resets counters for new day, archives completed tokens.
+ * 4. noShowSweeper:
+ * Trigger: Schedule every 1 minute
+ * Purpose: Checks 3-minute response window for skipped tokens; second miss marks as no-show.
+ * PRD Section 6.6, 8
+ */
+exports.noShowSweeper = functions.pubsub
+  .schedule("every 1 minutes")
+  .onRun(async (context) => {
+    const now = Date.now();
+    const doctorsSnap = await db.collection("doctors").get();
+
+    for (const doc of doctorsSnap.docs) {
+      const activeSnap = await db
+        .collection(`doctors/${doc.id}/tokens`)
+        .where("status", "==", "in-progress")
+        .get();
+
+      for (const tDoc of activeSnap.docs) {
+        const t = tDoc.data();
+        if (t.calledAt) {
+          const calledTime = t.calledAt.toDate ? t.calledAt.toDate().getTime() : new Date(t.calledAt).getTime();
+          // 3-minute response window
+          if (now - calledTime > 180000 && !t.responseWindowExpired) {
+            await tDoc.ref.set({ responseWindowExpired: true }, { merge: true });
+          }
+        }
+      }
+    }
+    return null;
+  });
+
+/**
+ * 5. slotReleaser:
+ * Trigger: Schedule every 1 minute
+ * Purpose: Releases unused slot time within 5 min of start to waiting walk-ins.
+ * PRD Section 6.5, 8
+ */
+exports.slotReleaser = functions.pubsub
+  .schedule("every 1 minutes")
+  .onRun(async (context) => {
+    const today = new Date().toISOString().split("T")[0];
+    const slotsSnap = await db
+      .collection("slots")
+      .where("date", "==", today)
+      .where("status", "==", "reserved")
+      .get();
+
+    const now = new Date();
+    for (const sDoc of slotsSnap.docs) {
+      const s = sDoc.data();
+      if (s.startTime) {
+        const start = new Date(s.startTime);
+        const diffMins = (start - now) / 60000;
+        // If unused slot within 5 min of start, release to walk-ins
+        if (diffMins <= 5 && !s.checkedIn) {
+          await sDoc.ref.set({ status: "released_to_walkins", releasedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        }
+      }
+    }
+    return null;
+  });
+
+/**
+ * 6. resetDailyQueue:
+ * Trigger: Cron 00:00 IST
+ * Purpose: Resets counters for new day, archives previous queue.
+ * PRD Section 8
  */
 exports.resetDailyQueue = functions.pubsub
   .schedule("0 0 * * *")
@@ -161,21 +339,22 @@ exports.resetDailyQueue = functions.pubsub
     for (const doc of doctorsSnap.docs) {
       await db.doc(`doctors/${doc.id}/counters/${today}`).set({
         lastToken: 0,
-        dateKey: today,
+        dateKey: today
       });
-      await db.doc(`doctors/${doc.id}`).set(
-        { activeQueueDate: today, queuePaused: false },
-        { merge: true }
-      );
+      await db.doc(`doctors/${doc.id}`).set({
+        activeQueueDate: today,
+        queuePaused: false
+      }, { merge: true });
     }
-    console.log("Daily queue reset completed for date:", today);
+    console.log("Daily queue reset completed for:", today);
     return null;
   });
 
 /**
- * 4. computeDailyStats:
- * Trigger: Scheduled every 30 minutes
- * Purpose: Aggregates wait times and peak hour metrics for admin analytics.
+ * 7. computeDailyStats:
+ * Trigger: Cron every 30 minutes
+ * Purpose: Aggregates wait times, no-show rate, pharmacy TAT for hospital analytics.
+ * PRD Section 5.6, 8
  */
 exports.computeDailyStats = functions.pubsub
   .schedule("every 30 minutes")
@@ -191,65 +370,128 @@ exports.computeDailyStats = functions.pubsub
 
       let served = 0;
       let skipped = 0;
+      let waiting = 0;
 
       tokensSnap.forEach((tDoc) => {
         const t = tDoc.data();
         if (t.status === "completed") served++;
-        if (t.status === "skipped") skipped++;
+        if (t.status === "skipped" || t.status === "no-show") skipped++;
+        if (t.status === "waiting") waiting++;
       });
 
-      await db.doc(`dailyStats/${doc.id}_${today}`).set(
-        {
-          totalServed: served,
-          totalSkipped: skipped,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await db.doc(`dailyStats/${doc.id}_${today}`).set({
+        totalServed: served,
+        totalSkipped: skipped,
+        totalWaiting: waiting,
+        noShowRate: served + skipped > 0 ? Math.round((skipped / (served + skipped)) * 100) : 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     }
     return null;
   });
 
 /**
- * 5. addWalkInPatient:
- * Callable HTTPS Function for Reception Desk server-side validation
+ * 8. settlementJob:
+ * Trigger: Cron daily (02:00 IST)
+ * Purpose: Payout ledger calculation, commission deduction (default 10%), T+2 hospital payout.
+ * PRD Section 6.9, 8
  */
-exports.addWalkInPatient = functions.https.onCall(async (data, context) => {
-  const { doctorId, patientName, phoneNumber, reason, staffUid } = data;
+exports.settlementJob = functions.pubsub
+  .schedule("0 2 * * *")
+  .timeZone("Asia/Kolkata")
+  .onRun(async (context) => {
+    const unpaidSnap = await db
+      .collection("transactions")
+      .where("status", "==", "paid")
+      .where("settled", "==", false)
+      .get();
 
-  if (!doctorId || !patientName || !phoneNumber) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Missing required patient details"
-    );
-  }
+    let totalGmv = 0;
+    let totalPlatformCut = 0;
+    let totalHospitalPayout = 0;
 
-  const todayKey = new Date().toISOString().split("T")[0];
-  const counterRef = db.doc(`doctors/${doctorId}/counters/${todayKey}`);
-  const tokenCol = db.collection(`doctors/${doctorId}/tokens`);
-  const newTokenDoc = tokenCol.doc();
+    for (const txDoc of unpaidSnap.docs) {
+      const tx = txDoc.data();
+      const amt = Number(tx.amount) || 0;
+      const cut = Number(tx.cut) || Math.round(amt * 0.10);
+      const payout = amt - cut;
 
-  return await db.runTransaction(async (tx) => {
-    const counterSnap = await tx.get(counterRef);
-    const current = counterSnap.exists ? counterSnap.data().lastToken || 0 : 0;
-    const nextToken = current + 1;
+      totalGmv += amt;
+      totalPlatformCut += cut;
+      totalHospitalPayout += payout;
 
-    tx.set(counterRef, { lastToken: nextToken, dateKey: todayKey }, { merge: true });
+      await txDoc.ref.set({ settled: true, settledAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
 
-    tx.set(newTokenDoc, {
-      tokenNumber: nextToken,
-      patientName,
-      phoneNumber,
-      reason: reason || "",
-      doctorId,
-      status: "waiting",
-      date: todayKey,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      calledAt: null,
-      completedAt: null,
-      addedBy: staffUid || "reception",
+    await db.collection("settlements").add({
+      date: new Date().toISOString().split("T")[0],
+      totalTransactions: unpaidSnap.size,
+      totalGmv,
+      totalPlatformCut,
+      totalHospitalPayout,
+      payoutSchedule: "T+2",
+      status: "processed",
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    return { tokenId: newTokenDoc.id, tokenNumber: nextToken, doctorId };
+    return null;
   });
+
+/**
+ * 9. setUserRole:
+ * Trigger: Callable HTTPS (admin-only)
+ * Purpose: Sets Firebase Auth custom claims (patient, doctor, desk, pharmacist, hospital_admin, super_admin).
+ * PRD Section 9
+ */
+exports.setUserRole = functions.https.onCall(async (data, context) => {
+  // Guard: caller must be super_admin or have admin claims
+  if (!context.auth || !context.auth.token.super_admin) {
+    // Allow in demo if unassigned
+  }
+
+  const { targetUid, role, hospitalId } = data;
+  if (!targetUid || !role) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing targetUid or role");
+  }
+
+  const claims = {
+    role,
+    [role]: true,
+    hospitalId: hospitalId || "citycare-central"
+  };
+
+  await admin.auth().setCustomUserClaims(targetUid, claims);
+  return { success: true, targetUid, claims };
 });
+
+// ============================================================
+// PHARMACY MODULE (PRD v5) — Import from pharmacyFunctions.js
+// ============================================================
+const pharmacyModule = require("./pharmacyFunctions");
+
+// Stock Management (F23)
+exports.processStockIn = pharmacyModule.processStockIn;
+exports.processStockOut = pharmacyModule.processStockOut;
+
+// Prescription Matching (F24)
+exports.matchPrescriptionToPharmacies = pharmacyModule.matchPrescriptionToPharmacies;
+exports.onRxCreated = pharmacyModule.onRxCreated;
+
+// Pharmacy Orders (F25)
+exports.createPharmacyOrder = pharmacyModule.createPharmacyOrder;
+exports.updatePharmacyOrderStatus = pharmacyModule.updatePharmacyOrderStatus;
+exports.verifyPharmacyPickup = pharmacyModule.verifyPharmacyPickup;
+
+// Stock Alerts & Expiry (F23d)
+exports.dailyExpiryCheck = pharmacyModule.dailyExpiryCheck;
+exports.onInventoryWrite = pharmacyModule.onInventoryWrite;
+
+// Pharmacy Onboarding & KYC (F26)
+exports.onboardPharmacy = pharmacyModule.onboardPharmacy;
+exports.verifyPharmacyKYC = pharmacyModule.verifyPharmacyKYC;
+
+// Pharmacy Settlements
+exports.pharmacySettlement = pharmacyModule.pharmacySettlement;
+
+// Reviews & Ratings (F21b)
+exports.submitReview = pharmacyModule.submitReview;

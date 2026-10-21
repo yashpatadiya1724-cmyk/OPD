@@ -3,6 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ============================================================
+    // EXISTING COLLECTIONS (v4)
+    // ============================================================
+
     // Doctors collection and sub-collections
     match /doctors/{doctorId} {
       allow read, write: if true;
@@ -18,15 +22,6 @@ service cloud.firestore {
       }
     }
 
-    // Pharmacy tokens & counters (Section 7.10 & 7.11)
-    match /pharmacy_tokens/{tokenId} {
-      allow read, write: if true;
-    }
-
-    match /pharmacyCounters/{counterId} {
-      allow read, write: if true;
-    }
-
     // Staff & Patient User accounts
     match /users/{userId} {
       allow read, write: if true;
@@ -40,6 +35,11 @@ service cloud.firestore {
     // Hospitals directory (Zomato for hospitals)
     match /hospitals/{hospitalId} {
       allow read, write: if true;
+
+      // Departments sub-collection (v5)
+      match /departments/{departmentId} {
+        allow read, write: if true;
+      }
     }
 
     // Patient Reviews & Ratings
@@ -57,7 +57,90 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Catch-all fallback for open clinical demo ecosystem
+    // Prescriptions
+    match /prescriptions/{prescriptionId} {
+      allow read, write: if true;
+
+      // Pharmacy matches sub-collection (v5)
+      match /pharmacyMatches/{matchId} {
+        allow read, write: if true;
+      }
+    }
+
+    // ============================================================
+    // NEW COLLECTIONS (v5 — Pharmacy Ecosystem)
+    // ============================================================
+
+    // Pharmacies directory
+    match /pharmacies/{pharmacyId} {
+      allow read, write: if true;
+
+      // Pharmacy inventory (stock) sub-collection
+      match /inventory/{drugId} {
+        allow read, write: if true;
+      }
+
+      // Stock transaction audit trail
+      match /stockTransactions/{transactionId} {
+        allow read, write: if true;
+      }
+    }
+
+    // Pharmacy Orders (Blinkit-style orders)
+    match /pharmacyOrders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Pharmacy Settlements
+    match /pharmacySettlements/{settlementId} {
+      allow read, write: if true;
+    }
+
+    // Drug Master Database
+    match /drugMaster/{drugId} {
+      allow read, write: if true;
+    }
+
+    // Generic Master Database (Jan Aushadhi)
+    match /genericMaster/{genericId} {
+      allow read, write: if true;
+    }
+
+    // ============================================================
+    // EXISTING (v4 carried over)
+    // ============================================================
+
+    // Pharmacy tokens (legacy — v4 hospital pharmacy)
+    match /pharmacy_tokens/{tokenId} {
+      allow read, write: if true;
+    }
+
+    match /pharmacyCounters/{counterId} {
+      allow read, write: if true;
+    }
+
+    // Transactions ledger
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    // Settlements (consultation)
+    match /settlements/{settlementId} {
+      allow read, write: if true;
+    }
+
+    // Slots
+    match /slots/{slotId} {
+      allow read, write: if true;
+    }
+
+    // Audit logs (immutable — functions only in production)
+    match /audit_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Catch-all fallback for open demo ecosystem
+    // TODO: In production, change to deny and enforce RBAC per PRD v5 Section 15
     match /{document=**} {
       allow read, write: if true;
     }

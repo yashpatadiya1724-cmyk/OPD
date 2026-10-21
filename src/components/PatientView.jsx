@@ -21,7 +21,10 @@ import {
   Car,
   Navigation,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Plane,
+  Scan,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   subscribeDoctorList, 
@@ -33,7 +36,14 @@ import {
   subscribeSingleToken,
   saveToUserHistory,
   getPharmacyPriceComparison,
-  subscribePharmacyTokens
+  subscribePharmacyTokens,
+  calculateWaitTimeRange,
+  getLeaveNowState,
+  calculateSlotRefund,
+  saveDpdpConsent,
+  getDpdpConsent,
+  recordTransaction,
+  logAuditEvent
 } from '../firebase';
 import { 
   playChime, 
@@ -43,6 +53,8 @@ import {
   sendBrowserNotification 
 } from '../utils/audio';
 import { useAuth } from '../context/AuthContext';
+import RazorpayModal from './RazorpayModal';
+import BlinkitFulfillmentModal from './BlinkitFulfillmentModal';
 
 const STORAGE_KEY = 'citycare_patient_token_session';
 
@@ -63,11 +75,38 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
   const [selectedSlotTime, setSelectedSlotTime] = useState('10:30 AM - 10:45 AM');
   const [paymentOption, setPaymentOption] = useState('prepaid');
 
-  // Post-Consultation Rating & Review state (MediQ PRD Section 9.10)
+  // PRD v4: Priority Lane ('normal' | 'senior' | 'pregnant' | 'disabled')
+  const [patientLane, setPatientLane] = useState(currentUser?.lane || 'normal');
+
+  // PRD v4: Family Profiles
+  const [familyProfile, setFamilyProfile] = useState('self');
+  const [customFamilyName, setCustomFamilyName] = useState('');
+  const [customFamilyRelation, setCustomFamilyRelation] = useState('Father');
+
+  // Razorpay Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingSlotBooking, setPendingSlotBooking] = useState(null);
+
+  // Cancellation & Refund Modal State
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Doctor Delay / Pause Dismiss state
+  const [delayNoticeDismissed, setDelayNoticeDismissed] = useState(false);
+
+  // DPDP Consent state
+  const [dpdpConsented, setDpdpConsented] = useState(() => {
+    return getDpdpConsent(currentUser?.uid || 'guest').healthDataProcessing;
+  });
+
+  // Post-Consultation Rating & Review state
   const [patientRating, setPatientRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
-  const [submittingReview, setSubmittingReview] = useState(false);
+  // Completed Pharmacy Order Banner
+  const [completedOrderNotice, setCompletedOrderNotice] = useState(null);
+  const [showBlinkitModal, setShowBlinkitModal] = useState(false);
+  const [blinkitInitialMode, setBlinkitInitialMode] = useState('drone');
 
   // Check-in form fields
   const [patientName, setPatientName] = useState(currentUser?.displayName || '');
@@ -139,7 +178,52 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
             `Your token #${tData.tokenNumber} is now being called! Please proceed to the doctor.`
           );
         }
+
+        // AUTO-CLEAR: When pharmacy completes order and dispenses medicines, remove queue screen!
+        if (tData.pharmacyStatus === 'dispensed' || tData.status === 'dispensed') {
+          playChime();
+          vibrateDevice([200, 100, 200]);
+          sendBrowserNotification(
+            "Medicines Dispensed! - CityCare OPD",
+            `Your prescription for token #${tData.tokenNumber || session.tokenNumber} has been dispensed. Your OPD visit is complete!`
+          );
+          setCompletedOrderNotice({
+            tokenNumber: tData.tokenNumber || session.tokenNumber,
+            doctorName: session.doctorName || 'Doctor',
+            medicines: tData.prescribedMedicines || []
+          });
+          try {
+            localStorage.removeItem(STORAGE_KEY);
+          } catch (e) {}
+          setSession(null);
+          setMyTokenData(null);
+          return;
+        }
+
         prevStatusRef.current = tData.status;
+      }
+    });
+
+    // Also listen directly to pharmacy_tokens to catch immediate dispense updates
+    const unsubPharmacy = subscribePharmacyTokens((pharmList) => {
+      const match = pharmList.find(p => 
+        (p.linkedDoctorTokenId && p.linkedDoctorTokenId === session.tokenId) ||
+        (p.id && p.id === session.tokenId) ||
+        (p.tokenCode && session.pharmacyTokenCode && p.tokenCode === session.pharmacyTokenCode)
+      );
+
+      if (match && match.status === 'dispensed') {
+        playChime();
+        setCompletedOrderNotice({
+          tokenNumber: session.tokenNumber,
+          doctorName: session.doctorName || 'Doctor',
+          medicines: match.medicines || []
+        });
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {}
+        setSession(null);
+        setMyTokenData(null);
       }
     });
 
@@ -178,6 +262,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
 
     return () => {
       unsubToken();
+      unsubPharmacy();
       unsubDoc();
       unsubQueue();
     };
@@ -195,34 +280,66 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
       return;
     }
 
+    const docObj = doctors.find(d => d.id === selectedDoctorId);
+
+    // If slot prepayment, open Razorpay modal
+    if (entryMode === 'slot' && paymentOption === 'prepaid') {
+      setPendingSlotBooking({
+        selectedDoctorId,
+        docObj,
+        patientName: patientName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        reason: reason.trim(),
+        slotTime: selectedSlotTime,
+        lane: patientLane
+      });
+      setShowPaymentModal(true);
+      return;
+    }
+
+    await executeBooking({
+      selectedDoctorId,
+      docObj,
+      patientName: patientName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      reason: reason.trim(),
+      lane: patientLane,
+      slotTime: entryMode === 'slot' ? selectedSlotTime : null,
+      paymentStatus: paymentOption,
+      paymentMethod: 'Pay at Hospital'
+    });
+  };
+
+  const executeBooking = async (bookingParams) => {
     try {
       setIsSubmitting(true);
       setErrorMessage('');
-
       await requestNotificationPermission();
 
-      const docObj = doctors.find(d => d.id === selectedDoctorId);
-      let result;
+      const { selectedDoctorId, docObj, patientName, phoneNumber, reason, lane, slotTime, paymentStatus, paymentMethod, gatewayTxId } = bookingParams;
 
+      let result;
       if (entryMode === 'slot') {
-        // Slot Booking Flow (PRD Section 9.3)
         result = await bookDoctorSlot(selectedDoctorId, {
-          patientName: patientName.trim(),
-          phoneNumber: phoneNumber.trim(),
-          reason: reason.trim(),
-          slotTime: selectedSlotTime,
+          patientName,
+          phoneNumber,
+          reason,
+          slotTime,
           consultationFee: docObj?.consultationFee || 500,
           hospitalId: activeHospital?.id || docObj?.hospitalId || 'citycare-central',
           hospitalName: activeHospital?.name || docObj?.hospitalName || 'CityCare Central Hospital',
           doctorName: docObj?.name || '',
-          paymentStatus: paymentOption
+          paymentStatus: paymentStatus || 'prepaid',
+          paymentMethod: paymentMethod || 'UPI / Razorpay',
+          lane: lane || 'normal'
         });
       } else {
-        // Walk-In Flow
         result = await generateToken(selectedDoctorId, {
-          patientName: patientName.trim(),
-          phoneNumber: phoneNumber.trim(),
-          reason: reason.trim(),
+          patientName,
+          phoneNumber,
+          reason,
+          lane: lane || 'normal',
+          type: 'walkin',
           addedBy: 'self'
         });
       }
@@ -231,10 +348,12 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
         doctorId: selectedDoctorId,
         tokenId: result.tokenId,
         tokenNumber: result.tokenNumber,
-        patientName: patientName.trim(),
-        phoneNumber: phoneNumber.trim(),
+        tokenCode: result.tokenCode,
+        patientName,
+        phoneNumber,
         entryMode,
-        slotTime: entryMode === 'slot' ? selectedSlotTime : null
+        slotTime: entryMode === 'slot' ? slotTime : null,
+        lane: lane || 'normal'
       };
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
@@ -244,10 +363,11 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
       saveToUserHistory({
         id: `hist-${result.tokenId || Date.now()}`,
         tokenNumber: result.tokenNumber,
+        tokenCode: result.tokenCode,
         bookingMode: entryMode,
-        slotTime: entryMode === 'slot' ? selectedSlotTime : null,
-        patientName: patientName.trim(),
-        phoneNumber: phoneNumber.trim(),
+        slotTime: entryMode === 'slot' ? slotTime : null,
+        patientName,
+        phoneNumber,
         doctorId: selectedDoctorId,
         doctorName: docObj?.name || doctorData?.name || 'Doctor',
         department: docObj?.department || doctorData?.department || 'General Medicine',
@@ -256,10 +376,12 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
         hospitalName: activeHospital?.name || docObj?.hospitalName || 'CityCare Central Hospital',
         roomNumber: docObj?.roomNumber || doctorData?.roomNumber || 'Room 102',
         floorWing: docObj?.floorWing || doctorData?.floorWing || '',
-        reason: reason.trim() || 'OPD Consultation',
+        reason: reason || 'OPD Consultation',
         status: 'waiting',
+        lane: lane || 'normal',
         consultationFee: docObj?.consultationFee || 500,
-        paymentStatus: 'paid',
+        paymentStatus: paymentStatus === 'prepaid' ? 'paid' : 'pay-at-hospital',
+        gatewayTxId: gatewayTxId || null,
         date: new Date().toISOString().split('T')[0]
       });
 
@@ -269,6 +391,63 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
       setErrorMessage('Failed to generate token: ' + err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRazorpaySuccess = async (txResult) => {
+    if (!pendingSlotBooking) return;
+    await executeBooking({
+      ...pendingSlotBooking,
+      paymentStatus: 'prepaid',
+      paymentMethod: txResult.paymentMethod,
+      gatewayTxId: txResult.gatewayTxId
+    });
+    setPendingSlotBooking(null);
+  };
+
+  const handleCancelAndRefund = async () => {
+    if (!session?.tokenId && !session?.tokenNumber) return;
+    try {
+      setIsCancelling(true);
+      const refund = calculateSlotRefund(session.slotTime, doctorData?.consultationFee || 500);
+
+      if (refund.refundAmount > 0) {
+        await recordTransaction({
+          type: 'refund',
+          amount: -refund.refundAmount,
+          platformCut: 0,
+          hospitalPayout: -refund.refundAmount,
+          patientName: session.patientName,
+          doctorId: session.doctorId,
+          doctorName: doctorData?.name || '',
+          hospitalId: activeHospital?.id || 'citycare-central',
+          hospitalName: activeHospital?.name || 'CityCare Central Hospital',
+          paymentMethod: 'UPI / Original Source',
+          status: 'refunded',
+          notes: `${refund.reason} for cancelled slot ${session.slotTime || ''}`
+        });
+      }
+
+      await logAuditEvent({
+        actor: session.patientName,
+        actorRole: 'patient',
+        action: 'SLOT_CANCELLED_REFUND',
+        entityType: 'token',
+        entityId: session.tokenId,
+        reason: refund.reason,
+        details: { refundAmount: refund.refundAmount, refundPercent: refund.refundPercent }
+      });
+
+      localStorage.removeItem(STORAGE_KEY);
+      setSession(null);
+      setMyTokenData(null);
+      setShowCancelModal(false);
+      alert(`Booking cancelled successfully. Refund: ₹${refund.refundAmount} (${refund.refundPercent}% refund policy applied).`);
+    } catch (e) {
+      console.error(e);
+      alert('Cancellation error: ' + e.message);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -318,14 +497,28 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
     }
   };
 
-  // Queue Calculations
+  // Queue Calculations (PRD v4 6.3 & 6.4)
   const myTokenNum = myTokenData?.tokenNumber || session?.tokenNumber;
   const currentServingToken = doctorQueueTokens.find(t => t.status === 'in-progress');
   const servingNumber = currentServingToken ? currentServingToken.tokenNumber : (doctorQueueTokens.filter(t => t.status === 'completed').length);
 
   const patientsAhead = doctorQueueTokens.filter(
-    t => t.status === 'waiting' && t.tokenNumber < myTokenNum
+    t => t.status === 'waiting' && (t.tokenNumber || 0) < (myTokenNum || 0)
   ).length;
+
+  const completedConsults = doctorQueueTokens.filter(t => t.status === 'completed');
+  const waitInfo = calculateWaitTimeRange(patientsAhead, doctorData || {}, completedConsults);
+
+  const leaveNowInfo = getLeaveNowState({
+    etaMin: waitInfo.minRange,
+    travelTimeMinutes: 14,
+    parkingBufferMinutes: 5
+  });
+
+  const refundInfo = calculateSlotRefund(
+    session?.slotTime || myTokenData?.slotTime, 
+    doctorData?.consultationFee || 500
+  );
 
   const avgConsult = doctorData?.avgConsultationMinutes || 10;
   const estimatedWaitMinutes = patientsAhead * avgConsult;
@@ -373,6 +566,62 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
               <XCircle size={22} />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* COMPLETED PHARMACY ORDER BANNER (Queue screen cleared) */}
+      {completedOrderNotice && (
+        <div style={{
+          background: '#ecfdf5',
+          border: '2px solid #10b981',
+          borderRadius: '16px',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          boxShadow: '0 8px 24px rgba(16, 185, 129, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              background: '#059669',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <CheckCircle2 size={26} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#064e3b' }}>
+                ✓ Pharmacy Order Dispensed &amp; OPD Visit Complete!
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#047857', fontWeight: 600, marginTop: '2px' }}>
+                Token #{completedOrderNotice.tokenNumber} is closed. Medicines dispensed at pharmacy counter.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCompletedOrderNotice(null)}
+            style={{
+              background: '#059669',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer'
+            }}
+          >
+            ✕ Dismiss
+          </button>
         </div>
       )}
 
@@ -545,6 +794,106 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
               </div>
             )}
 
+            {/* PRD v4: Family Profiles */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+                Booking For <span style={{ color: 'var(--accent-rose)' }}>*</span>
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                {[
+                  { id: 'self', label: 'Myself (Riya)', icon: '👤' },
+                  { id: 'ramesh', label: 'Ramesh (Father, 68)', icon: '👴', defaultLane: 'senior' },
+                  { id: 'aarav', label: 'Aarav (Child, 4)', icon: '👶', defaultLane: 'pregnant' },
+                  { id: 'other', label: '+ Add Family Member', icon: '➕' }
+                ].map(mem => (
+                  <button
+                    key={mem.id}
+                    type="button"
+                    onClick={() => {
+                      setFamilyProfile(mem.id);
+                      if (mem.id === 'self') {
+                        setPatientName(currentUser?.displayName || 'Riya Sharma');
+                        setPatientLane('normal');
+                      } else if (mem.id === 'ramesh') {
+                        setPatientName('Ramesh Kumar');
+                        setPatientLane('senior');
+                      } else if (mem.id === 'aarav') {
+                        setPatientName('Aarav Patel');
+                        setPatientLane('pregnant');
+                      }
+                    }}
+                    style={{
+                      padding: '0.45rem 0.85rem',
+                      borderRadius: '8px',
+                      border: familyProfile === mem.id ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      background: familyProfile === mem.id ? '#eff6ff' : '#ffffff',
+                      color: familyProfile === mem.id ? '#0284c7' : '#334155',
+                      fontWeight: 800,
+                      fontSize: '0.8rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>{mem.icon}</span> {mem.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* PRD v4 Section 6.2: Priority Lanes */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 900, color: '#334155', textTransform: 'uppercase' }}>
+                  Priority Triage Lane
+                </span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: patientLane !== 'normal' ? '#059669' : '#64748b' }}>
+                  {patientLane !== 'normal' ? '⚡ +50 Queue Score Bonus' : 'Standard FIFO'}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '8px',
+                  border: patientLane === 'normal' ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                  background: patientLane === 'normal' ? '#eff6ff' : '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 800
+                }}>
+                  <input
+                    type="radio"
+                    name="patientLane"
+                    checked={patientLane === 'normal'}
+                    onChange={() => setPatientLane('normal')}
+                  />
+                  <span>Normal OPD</span>
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '8px',
+                  border: patientLane === 'senior' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
+                  background: patientLane === 'senior' ? '#fffbeb' : '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 800
+                }}>
+                  <input
+                    type="radio"
+                    name="patientLane"
+                    checked={patientLane === 'senior'}
+                    onChange={() => setPatientLane('senior')}
+                  />
+                  <span>👴 Senior Citizen (60+)</span>
+                </label>
+              </div>
+            </div>
+
             <div>
               <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
                 Full Name <span style={{ color: 'var(--accent-rose)' }}>*</span>
@@ -674,28 +1023,78 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
         /* VIEW B: LIVE TOKEN STATUS */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
-          {/* SECTION 7.9: SMART LEAVE-NOW ENGINE ALERT BANNER */}
+          {/* PRD v4 Section 6.7: DOCTOR DELAY / PAUSE NOTICE */}
+          {doctorData?.queuePaused && !delayNoticeDismissed && (
+            <div style={{
+              background: '#fff1f2',
+              border: '2px solid #f43f5e',
+              borderRadius: '16px',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.85rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.6rem' }}>🚨</span>
+                  <div>
+                    <div style={{ fontWeight: 900, color: '#9f1239', fontSize: '1.05rem' }}>
+                      Doctor Delayed: {doctorData.pauseReason || 'Emergency surgery'}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#be123c', fontWeight: 700 }}>
+                      Expected Delay: ~{doctorData.expectedDelayMinutes || 30} mins. Your queue spot is preserved.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setDelayNoticeDismissed(true)}
+                  style={{ background: '#f43f5e', color: '#fff', border: 'none', padding: '0.45rem 0.95rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  ✓ Stay in Queue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert('Doctor reassignment request submitted. Front desk is allocating available General Medicine consultant.');
+                  }}
+                  style={{ background: '#ffffff', color: '#9f1239', border: '1.5px solid #f43f5e', padding: '0.45rem 0.95rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  🔄 Switch Doctor (Same Specialty)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(true)}
+                  style={{ background: '#ffffff', color: '#64748b', border: '1.5px solid #cbd5e1', padding: '0.45rem 0.95rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  📅 Cancel / Refund Slot
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PRD v4 Section 6.4: 4-STATE SMART LEAVE-NOW ENGINE ALERT BANNER */}
           {myTokenData?.status === 'waiting' && (
             <div style={{
-              background: patientsAhead <= 2 
-                ? 'linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)' 
-                : 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-              border: `2px solid ${patientsAhead <= 2 ? '#f59e0b' : '#38bdf8'}`,
+              background: leaveNowInfo.state === 'red' ? '#ffe4e6' : (leaveNowInfo.state === 'amber' ? '#fef3c7' : '#eff6ff'),
+              border: `2px solid ${leaveNowInfo.state === 'red' ? '#f43f5e' : (leaveNowInfo.state === 'amber' ? '#f59e0b' : '#38bdf8')}`,
               borderRadius: '16px',
               padding: '1.25rem 1.5rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '1rem',
-              boxShadow: patientsAhead <= 2 ? '0 8px 24px rgba(245, 158, 11, 0.2)' : 'none',
-              animation: patientsAhead <= 2 ? 'pulse 2s infinite' : 'none'
+              boxShadow: leaveNowInfo.state === 'red' ? '0 8px 24px rgba(244, 63, 94, 0.25)' : 'none',
+              animation: leaveNowInfo.state === 'red' ? 'pulse 2s infinite' : 'none'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{
                   width: '46px',
                   height: '46px',
                   borderRadius: '12px',
-                  background: patientsAhead <= 2 ? '#f59e0b' : '#0284c7',
+                  background: leaveNowInfo.state === 'red' ? '#e11d48' : (leaveNowInfo.state === 'amber' ? '#d97706' : '#0284c7'),
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
@@ -705,27 +1104,51 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                   <Car size={26} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: '1rem', color: patientsAhead <= 2 ? '#92400e' : '#0369a1' }}>
-                    {patientsAhead <= 2 ? '🚗 LEAVE NOW FOR HOSPITAL!' : '📍 SMART LEAVE-NOW ENGINE ACTIVE'}
+                  <div style={{ fontWeight: 900, fontSize: '1rem', color: leaveNowInfo.state === 'red' ? '#9f1239' : (leaveNowInfo.state === 'amber' ? '#92400e' : '#0369a1') }}>
+                    {leaveNowInfo.label}
                   </div>
-                  <div style={{ fontSize: '0.82rem', color: patientsAhead <= 2 ? '#b45309' : '#0284c7', fontWeight: 700, marginTop: '2px' }}>
-                    {patientsAhead <= 2 
-                      ? 'Live Traffic ETA: ~12 mins • Only 2 patients ahead • Leave home now to walk directly into the doctor room!'
-                      : 'Live Traffic ETA: ~12 mins • You can relax at home. We will notify you precisely when to leave!'}
+                  <div style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 700, marginTop: '2px' }}>
+                    {leaveNowInfo.message}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, marginTop: '4px' }}>
+                    Traffic confidence: ±3 min &bull; Hospital parking buffer: {leaveNowInfo.buffer} min
                   </div>
                 </div>
               </div>
 
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hospName = activeHospital?.name || 'CityCare Central Hospital';
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(hospName)}`, '_blank');
+                  }}
+                  style={{
+                    background: '#ffffff',
+                    color: '#0284c7',
+                    border: '1.5px solid #0284c7',
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                  }}
+                >
+                  <Navigation size={14} /> Open in Maps
+                </button>
                 <span style={{
-                  background: patientsAhead <= 2 ? '#d97706' : '#0284c7',
+                  background: leaveNowInfo.badgeColor,
                   color: '#fff',
-                  fontSize: '0.75rem',
+                  fontSize: '0.72rem',
                   fontWeight: 900,
-                  padding: '0.35rem 0.75rem',
+                  padding: '0.25rem 0.65rem',
                   borderRadius: '20px'
                 }}>
-                  {patientsAhead <= 2 ? '⚡ DEPART NOW' : '⏳ ETA SYNCED'}
+                  {leaveNowInfo.state.toUpperCase()}
                 </span>
               </div>
             </div>
@@ -740,6 +1163,30 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
             border: myTokenData?.status === 'in-progress' ? '2px solid var(--accent-emerald)' : '1px solid var(--border-subtle)'
           }}>
             
+            {/* PRD v4: Priority Lane & Slot Badges */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+              {session?.lane === 'emergency' && (
+                <span style={{ background: '#ffe4e6', color: '#e11d48', padding: '0.3rem 0.85rem', borderRadius: '20px', fontWeight: 900, fontSize: '0.78rem', border: '1.5px solid #f43f5e' }}>
+                  🚨 EMERGENCY LANE (Priority 1000)
+                </span>
+              )}
+              {['senior', 'pregnant', 'disabled'].includes(session?.lane) && (
+                <span style={{ background: '#fef3c7', color: '#b45309', padding: '0.3rem 0.85rem', borderRadius: '20px', fontWeight: 900, fontSize: '0.78rem', border: '1.5px solid #f59e0b' }}>
+                  👴 PRIORITY CARE LANE (+50 Score)
+                </span>
+              )}
+              {(!session?.lane || session?.lane === 'normal') && (
+                <span style={{ background: '#f1f5f9', color: '#475569', padding: '0.3rem 0.85rem', borderRadius: '20px', fontWeight: 800, fontSize: '0.75rem', border: '1px solid #cbd5e1' }}>
+                  👤 Normal OPD Lane
+                </span>
+              )}
+              {session?.entryMode === 'slot' && (
+                <span style={{ background: '#eff6ff', color: '#0284c7', padding: '0.3rem 0.85rem', borderRadius: '20px', fontWeight: 800, fontSize: '0.75rem', border: '1px solid #bfdbfe' }}>
+                  📅 Slot: {session.slotTime || '10:30 AM'} (Grace: ±10 min)
+                </span>
+              )}
+            </div>
+
             {/* Status Pill */}
             <div style={{ marginBottom: '1.15rem' }}>
               {myTokenData?.status === 'in-progress' && (
@@ -767,7 +1214,12 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
               )}
               {myTokenData?.status === 'skipped' && (
                 <span className="badge badge-skipped" style={{ fontSize: '0.88rem', padding: '0.4rem 1.15rem' }}>
-                  Token Skipped
+                  Token Skipped (Moved 3 back)
+                </span>
+              )}
+              {myTokenData?.status === 'no-show' && (
+                <span className="badge badge-skipped" style={{ fontSize: '0.88rem', padding: '0.4rem 1.15rem', background: '#fef2f2', color: '#dc2626' }}>
+                  ❌ Closed as No-Show
                 </span>
               )}
             </div>
@@ -816,22 +1268,63 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
               </div>
             </div>
 
-            {/* Estimated Wait Time */}
+            {/* PRD v4 Section 6.3: Estimated Wait Time Range */}
             {myTokenData?.status === 'waiting' && (
               <div style={{
                 marginTop: '1.15rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                color: 'var(--accent-cyan)',
-                fontSize: '0.98rem',
-                fontWeight: 800
+                padding: '0.85rem 1rem',
+                background: '#f0f9ff',
+                border: '1.5px solid #bae6fd',
+                borderRadius: '12px',
+                textAlign: 'center'
               }}>
-                <Clock size={20} />
-                <span>
-                  Estimated Wait: <strong>~{estimatedWaitMinutes} minutes</strong> ({avgConsult}m avg / patient)
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#0369a1', fontSize: '1.05rem', fontWeight: 900 }}>
+                  <Clock size={20} />
+                  <span>Estimated Wait: <strong>{waitInfo.displayRange}</strong></span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700, marginTop: '3px' }}>
+                  Rolling pace: ~{waitInfo.avgConsult} min/patient (weighted x1.5) &bull; Confidence range: ±{waitInfo.stdDev} min
+                </div>
+              </div>
+            )}
+
+            {/* Cancel & Refund Action Buttons */}
+            {myTokenData?.status === 'waiting' && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
+                {session?.entryMode === 'slot' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(true)}
+                    style={{
+                      padding: '0.5rem 1.1rem',
+                      borderRadius: '8px',
+                      background: '#fff1f2',
+                      color: '#e11d48',
+                      border: '1.5px solid #fecdd3',
+                      fontWeight: 800,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel Slot &amp; Refund
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLeaveQueue}
+                  style={{
+                    padding: '0.5rem 1.1rem',
+                    borderRadius: '8px',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    border: '1px solid #cbd5e1',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Leave Queue
+                </button>
               </div>
             )}
           </div>
@@ -1062,6 +1555,126 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                 </div>
               </div>
 
+              {/* Blinkit 10-Min & Drone Dispatch Action Bar (PRD v5 Module B) */}
+              <div style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                border: '1px solid #38bdf8',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.72rem', background: '#0284c7', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                      MODULE B • HYPERLOCAL BLINKIT SPEED
+                    </span>
+                    <span style={{ fontSize: '0.72rem', background: '#059669', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                      POSTER SCOPE 3
+                    </span>
+                  </div>
+                  <h4 style={{ margin: '0.3rem 0 0.15rem', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                    Want Medicines Delivered? 10-Min Dark Store or 🚁 Drone
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
+                    ACID stock deduction across local chemists with 70.9% Jan Aushadhi generic savings.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBlinkitInitialMode('drone');
+                      setShowBlinkitModal(true);
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.65rem 1.15rem',
+                      borderRadius: '8px',
+                      fontWeight: 900,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 12px rgba(5, 150, 105, 0.4)'
+                    }}
+                  >
+                    <Plane size={16} />
+                    <span>🚁 Cold-Chain Drone Drop</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBlinkitInitialMode('darkstore');
+                      setShowBlinkitModal(true);
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.65rem 1.15rem',
+                      borderRadius: '8px',
+                      fontWeight: 900,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
+                    }}
+                  >
+                    <Sparkles size={16} />
+                    <span>⚡ 10-Min Express Rider</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Explicit Exit / Done Button: Clears queue screen once pharmacy is completed */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playChime();
+                    setCompletedOrderNotice({
+                      tokenNumber: myTokenData?.tokenNumber || session?.tokenNumber,
+                      doctorName: doctorData?.name || session?.doctorName || 'Doctor',
+                      medicines: myTokenData?.prescribedMedicines || []
+                    });
+                    try {
+                      localStorage.removeItem(STORAGE_KEY);
+                    } catch (e) {}
+                    setSession(null);
+                    setMyTokenData(null);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.65rem 1.25rem',
+                    borderRadius: '10px',
+                    fontWeight: 900,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)'
+                  }}
+                >
+                  <CheckCircle2 size={18} />
+                  <span>✓ Medicines Received — Clear Queue Screen</span>
+                </button>
+              </div>
+
               {/* SECTION 7.11: PHARMACY PRICE & DISTANCE COMPARISON TABLE */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -1174,6 +1787,157 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
             </button>
           </div>
 
+        </div>
+      )}
+
+      {/* PRD v4 Section 9: DPDP ACT 2023 PRIVACY & CONSENT BADGE */}
+      <div style={{
+        marginTop: '2rem',
+        padding: '0.85rem 1.25rem',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+        fontSize: '0.78rem',
+        color: '#64748b'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '1rem' }}>🔒</span>
+          <div>
+            <strong style={{ color: '#334155' }}>DPDP Act 2023 Consent Active:</strong> Digital Health Data encrypted at rest &bull; GPS location tracking restricted to active OPD token duration only.
+          </div>
+        </div>
+        <span style={{ background: '#ecfdf5', color: '#047857', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: 800 }}>
+          ✓ Explicit Consent Recorded
+        </span>
+      </div>
+
+      {/* RAZORPAY PAYMENT MODAL (PRD v4 Section 6.9) */}
+      <RazorpayModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setPendingSlotBooking(null);
+        }}
+        amount={pendingSlotBooking?.docObj?.consultationFee || 500}
+        title="OPD Slot Prepayment"
+        doctorName={pendingSlotBooking?.docObj?.name || 'Doctor'}
+        hospitalName={activeHospital?.name || 'CityCare Central Hospital'}
+        slotTime={pendingSlotBooking?.slotTime || selectedSlotTime}
+        onPaymentSuccess={handleRazorpaySuccess}
+      />
+
+      {/* BLINKIT HYPERLOCAL & DRONE FULFILLMENT MODAL (MODULE B) */}
+      <BlinkitFulfillmentModal
+        isOpen={showBlinkitModal}
+        onClose={() => setShowBlinkitModal(false)}
+        initialMedicines={myTokenData?.prescribedMedicines || ['Paracetamol 650mg', 'Amoxicillin 500mg', 'Pantoprazole 40mg']}
+        initialMode={blinkitInitialMode}
+        doctorName={doctorData?.name || session?.doctorName || 'Dr. Rajesh Mehta'}
+        patientName={patientName || currentUser?.displayName || 'Ravi Kumar Patel'}
+      />
+
+      {/* CANCELLATION & REFUND POLICY MODAL (PRD v4 Section 6.5) */}
+      {showCancelModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.75rem',
+            maxWidth: '440px',
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#090d16', marginBottom: '0.5rem' }}>
+              Cancel Appointment &amp; Request Refund
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem', lineHeight: 1.4 }}>
+              Are you sure you want to cancel your scheduled consultation with <strong>{doctorData?.name}</strong>?
+            </p>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1.5px solid #cbd5e1',
+              borderRadius: '12px',
+              padding: '1rem',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                Refund Calculation (PRD 6.5 Policy)
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#334155' }}>Original Paid Fee:</span>
+                <strong style={{ fontSize: '0.95rem', color: '#090d16' }}>₹{doctorData?.consultationFee || 500}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#334155' }}>Refund Rate:</span>
+                <strong style={{ fontSize: '0.95rem', color: refundInfo.refundPercent > 0 ? '#059669' : '#dc2626' }}>
+                  {refundInfo.refundPercent}%
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#090d16' }}>Net Refund to Account:</span>
+                <strong style={{ fontSize: '1.25rem', fontWeight: 900, color: '#059669' }}>₹{refundInfo.refundAmount}</strong>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', fontWeight: 600 }}>
+                Rule: {refundInfo.reason}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCancelling}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  borderRadius: '10px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                Keep Appointment
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelAndRefund}
+                disabled={isCancelling}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  borderRadius: '10px',
+                  background: '#e11d48',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 900,
+                  cursor: isCancelling ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isCancelling ? 'Processing...' : 'Confirm Cancel'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

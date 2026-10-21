@@ -15,6 +15,74 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "availableQty", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "saltComposition", "order": "ASCENDING" },
+        { "fieldPath": "strength", "order": "ASCENDING" },
+        { "fieldPath": "form", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacyOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacyId", "order": "ASCENDING" },
+        { "fieldPath": "orderStatus", "order": "ASCENDING" },
+        { "fieldPath": "placedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacyOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "placedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hospitalId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "doctorId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stockTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "drugId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "kycStatus", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

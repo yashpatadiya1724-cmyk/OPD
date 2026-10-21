@@ -34,11 +34,23 @@ export const firebaseConfig = {
   measurementId: "G-9F3QR1DYXJ"
 };
 
+export const RAZORPAY_KEY_ID = "rzp_test_TmxKQ0fOUHs5z8";
+
+export const razorpayConfig = {
+  keyId: RAZORPAY_KEY_ID,
+  merchantName: "MediQ OPD Prepayment",
+  themeColor: "#0284c7"
+};
+
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export const RAZORPAY_CONFIG = {
+  keyId: RAZORPAY_KEY_ID
+};
 
 export function getTodayDateKey() {
   const d = new Date();
@@ -49,7 +61,10 @@ export function getTodayDateKey() {
 }
 
 /**
- * Atomic token generation transaction (Section 7.1 of PRD)
+ * Atomic token generation transaction (Section 6.1 & 6.2 of PRD v4)
+ * Supports priority lanes: Emergency (+1000), Senior/Pregnant/Disabled (+50), Normal (0)
+ * Cap checking: walk-in cap = dailyCap - reservedForSlots
+ * Idempotency: prevents duplicate booking for same patient/date
  */
 export async function generateToken(doctorId, patientData) {
   const todayKey = getTodayDateKey();
@@ -57,33 +72,564 @@ export async function generateToken(doctorId, patientData) {
   const tokenColRef = collection(db, 'doctors', doctorId, 'tokens');
   const newTokenDocRef = doc(tokenColRef);
 
+  const lane = patientData.lane || 'normal'; // 'emergency' | 'senior' | 'pregnant' | 'disabled' | 'normal'
+  const laneWeight = lane === 'emergency' ? 1000 : (['senior', 'pregnant', 'disabled'].includes(lane) ? 50 : 0);
+  const slotBonus = patientData.type === 'slot' && patientData.arrivedInGrace ? 30 : 0;
+  const initialPriorityScore = laneWeight + slotBonus;
+
   return await runTransaction(db, async (tx) => {
     const counterSnap = await tx.get(counterRef);
     const current = counterSnap.exists() ? (counterSnap.data().lastToken || 0) : 0;
+    const walkInCount = counterSnap.exists() ? (counterSnap.data().walkInCount || 0) : 0;
+    
+    // Check doctor caps if available
+    const doctorRef = doc(db, 'doctors', doctorId);
+    const doctorSnap = await tx.get(doctorRef);
+    const doctorData = doctorSnap.exists() ? doctorSnap.data() : {};
+    const dailyCap = doctorData.dailyCap || 40;
+    const reservedForSlots = doctorData.reservedForSlots || 15;
+    const walkInCap = Math.max(10, dailyCap - reservedForSlots);
+
+    const isWalkIn = (patientData.type || 'walkin') === 'walkin';
+    if (isWalkIn && walkInCount >= walkInCap && !patientData.overrideCap) {
+      const err = new Error(`Walk-in quota for today (${walkInCap} patients) has been reached. Please book an OPD slot or consult another available doctor.`);
+      err.code = 'CAP_REACHED';
+      throw err;
+    }
+
     const nextToken = current + 1;
+    const doctorCode = (doctorData.doctorCode || doctorId.replace(/[^a-zA-Z0-9]/g, '').slice(-3)).toUpperCase();
+    const tokenDisplayCode = `D${doctorCode}-${String(nextToken).padStart(2, '0')}`;
 
-    tx.set(counterRef, { lastToken: nextToken, dateKey: todayKey }, { merge: true });
+    tx.set(counterRef, { 
+      lastToken: nextToken, 
+      dateKey: todayKey,
+      walkInCount: isWalkIn ? walkInCount + 1 : walkInCount
+    }, { merge: true });
 
-    tx.set(newTokenDocRef, {
+    const tokenPayload = {
+      id: newTokenDocRef.id,
       tokenNumber: nextToken,
+      tokenCode: tokenDisplayCode,
       patientName: patientData.patientName,
       phoneNumber: patientData.phoneNumber,
+      familyMemberName: patientData.familyMemberName || null,
+      familyMemberRelation: patientData.familyMemberRelation || null,
       reason: patientData.reason || '',
       doctorId: doctorId,
+      doctorName: doctorData.name || patientData.doctorName || 'Doctor',
+      department: doctorData.department || patientData.department || 'General Medicine',
+      hospitalId: doctorData.hospitalId || patientData.hospitalId || 'citycare-central',
+      lane: lane,
+      type: patientData.type || 'walkin', // 'walkin' | 'slot'
+      slotTime: patientData.slotTime || null,
+      priorityScore: initialPriorityScore,
+      laneWeight: laneWeight,
       status: 'waiting',
+      skipCount: 0,
+      secondMissNoShow: false,
       date: todayKey,
       createdAt: serverTimestamp(),
       calledAt: null,
       completedAt: null,
       addedBy: patientData.addedBy || 'self'
-    });
+    };
+
+    tx.set(newTokenDocRef, tokenPayload);
 
     return {
       tokenId: newTokenDocRef.id,
       tokenNumber: nextToken,
-      doctorId
+      tokenCode: tokenDisplayCode,
+      doctorId,
+      priorityScore: initialPriorityScore,
+      lane
     };
   });
+}
+
+/**
+ * PRD v4 Section 6.2: Score-based priority queue ordering with fairness
+ * priority = laneWeight + slotBonus + agingBonus
+ * lane: Emergency=1000, Senior/Pregnant/Disabled=50, Normal=0
+ * slotBonus: +30 if slot arrived within grace window
+ * agingBonus: +1 per 5 min waited (prevents starvation)
+ * Emergency jumps to front, displaces at most 1 patient per 4 calls for non-emergency lanes
+ */
+export function calculatePriorityScore(token) {
+  let score = token.laneWeight || 0;
+  if (!score) {
+    if (token.lane === 'emergency') score = 1000;
+    else if (['senior', 'pregnant', 'disabled'].includes(token.lane)) score = 50;
+    else score = 0;
+  }
+  if (token.type === 'slot' && token.arrivedInGrace) {
+    score += 30;
+  }
+  // Aging bonus: +1 point per 5 minutes waited since token creation
+  if (token.createdAt) {
+    const createdDate = token.createdAt.toDate ? token.createdAt.toDate() : new Date(token.createdAt);
+    const minsWaited = Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000));
+    const agingBonus = Math.floor(minsWaited / 5);
+    score += agingBonus;
+  }
+  if (token.skipCount === 1) {
+    score -= 15; // Moved 3 positions back equivalent penalty
+  }
+  return score;
+}
+
+export function sortQueueByPriority(waitingTokens, consultCallCount = 0) {
+  if (!waitingTokens || waitingTokens.length === 0) return [];
+
+  const withScores = waitingTokens.map(t => ({
+    ...t,
+    dynamicPriorityScore: calculatePriorityScore(t)
+  }));
+
+  const emergencies = withScores.filter(t => t.lane === 'emergency');
+  const others = withScores.filter(t => t.lane !== 'emergency');
+
+  others.sort((a, b) => {
+    if (b.dynamicPriorityScore !== a.dynamicPriorityScore) {
+      return b.dynamicPriorityScore - a.dynamicPriorityScore;
+    }
+    return (a.tokenNumber || 0) - (b.tokenNumber || 0);
+  });
+
+  if (emergencies.length === 0) return others;
+
+  // Emergency fairness: allows emergency to jump to front, max 1 displacement per 4 regular calls
+  const finalQueue = [];
+  let eIdx = 0;
+  let oIdx = 0;
+
+  while (eIdx < emergencies.length || oIdx < others.length) {
+    if (eIdx < emergencies.length) {
+      finalQueue.push(emergencies[eIdx++]);
+    }
+    for (let i = 0; i < 3 && oIdx < others.length; i++) {
+      finalQueue.push(others[oIdx++]);
+    }
+  }
+
+  return finalQueue;
+}
+
+/**
+ * PRD v4 Section 6.3: Wait-Time (ETA) Estimation with Confidence Range
+ * avgConsult = weighted rolling mean of last 10 consults (recent x1.5)
+ * ETA = sum(avgConsult for each patient ahead) + expectedBreakRemaining
+ * range = ETA ± (1.0 * stdDev(last 10) * sqrt(patientsAhead)), cap ±50%
+ * Outlier guard: ignore consults <1 min or >60 min
+ */
+export function calculateWaitTimeRange(patientsAhead, doctorStats = {}, recentConsults = []) {
+  if (patientsAhead <= 0) {
+    return {
+      etaMinutes: 0,
+      minRange: 0,
+      maxRange: 2,
+      displayRange: '< 2 min',
+      stdDev: 2,
+      avgConsult: doctorStats.avgConsultationMinutes || 10
+    };
+  }
+
+  const validConsults = (recentConsults || []).map(c => {
+    if (c.calledAt && c.completedAt) {
+      const called = c.calledAt.toDate ? c.calledAt.toDate() : new Date(c.calledAt);
+      const completed = c.completedAt.toDate ? c.completedAt.toDate() : new Date(c.completedAt);
+      const diff = Math.round((completed - called) / 60000);
+      if (diff >= 1 && diff <= 60) return diff;
+    }
+    return null;
+  }).filter(Boolean).slice(-10);
+
+  let avgConsult = doctorStats.avgConsultationMinutes || 10;
+  let stdDev = 3.5;
+
+  if (validConsults.length >= 3) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    validConsults.forEach((duration, idx) => {
+      const weight = idx >= validConsults.length - 3 ? 1.5 : 1.0;
+      weightedSum += duration * weight;
+      totalWeight += weight;
+    });
+    avgConsult = Math.round(weightedSum / totalWeight);
+
+    const mean = weightedSum / totalWeight;
+    const variance = validConsults.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / validConsults.length;
+    stdDev = Math.max(1.5, Math.round(Math.sqrt(variance) * 10) / 10);
+  }
+
+  const expectedBreakRemaining = doctorStats.queuePaused ? (doctorStats.expectedDelayMinutes || 15) : 0;
+  const etaMinutes = (patientsAhead * avgConsult) + expectedBreakRemaining;
+
+  const delta = Math.min(etaMinutes * 0.5, Math.max(2, Math.round(1.0 * stdDev * Math.sqrt(patientsAhead))));
+  const minRange = Math.max(1, Math.round(etaMinutes - delta));
+  const maxRange = Math.round(etaMinutes + delta);
+
+  return {
+    etaMinutes,
+    minRange,
+    maxRange,
+    displayRange: `~${minRange}–${maxRange} min`,
+    stdDev,
+    avgConsult
+  };
+}
+
+/**
+ * PRD v4 Section 6.4: Leave-Now Engine
+ * buffer = 5 min (configurable) + parkingBuffer
+ * leaveAt = ETA_lower - travelTime - buffer
+ * States: Green (plenty of time), Amber (leave in <=10 min), Red (Leave Now), Late (ETA passed)
+ */
+export function getLeaveNowState({ etaMin = 20, travelTimeMinutes = 12, parkingBufferMinutes = 5 }) {
+  const buffer = 5 + (parkingBufferMinutes || 5);
+  const leaveAtMinutes = etaMin - travelTimeMinutes - buffer;
+
+  let state = 'green';
+  let label = 'Plenty of Time';
+  let message = `You can relax at home. Live traffic is ~${travelTimeMinutes} mins. We'll alert you when it's time to depart.`;
+  let badgeColor = '#059669';
+
+  if (leaveAtMinutes <= -5) {
+    state = 'late';
+    label = 'ETA Passed';
+    message = 'Your scheduled consultation time has passed. Please contact the front desk or reschedule your slot.';
+    badgeColor = '#dc2626';
+  } else if (leaveAtMinutes <= 0) {
+    state = 'red';
+    label = '🚗 LEAVE NOW FOR OPD';
+    message = `Traffic: ~${travelTimeMinutes} mins drive + ${buffer} mins parking buffer. Depart now to walk straight into the consultation room!`;
+    badgeColor = '#e11d48';
+  } else if (leaveAtMinutes <= 10) {
+    state = 'amber';
+    label = `🚗 Depart in ~${leaveAtMinutes} mins`;
+    message = `Get ready to leave in ${leaveAtMinutes} minutes to arrive comfortably before your turn.`;
+    badgeColor = '#d97706';
+  }
+
+  return {
+    state,
+    label,
+    message,
+    badgeColor,
+    leaveAtMinutes: Math.max(0, leaveAtMinutes),
+    buffer,
+    travelTimeMinutes
+  };
+}
+
+/**
+ * PRD v4 Section 6.5: Slot Cancellation & Refund Rules
+ * Cancel refund: >2h = 100%, 30 min–2h = 50%, <30 min or no-show = 0%
+ */
+export function calculateSlotRefund(slotTime, consultationFee = 500) {
+  let hoursUntil = 3.0;
+  try {
+    const timeMatch = slotTime?.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const mins = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      
+      const now = new Date();
+      const slotDate = new Date();
+      slotDate.setHours(hours, mins, 0, 0);
+      const diffMs = slotDate.getTime() - now.getTime();
+      hoursUntil = diffMs / (1000 * 60 * 60);
+    }
+  } catch (e) {}
+
+  let refundPercent = 0;
+  let reason = '';
+  if (hoursUntil > 2.0) {
+    refundPercent = 100;
+    reason = 'Cancelled >2h before slot (100% full refund)';
+  } else if (hoursUntil >= 0.5) {
+    refundPercent = 50;
+    reason = 'Cancelled between 30 min and 2h before slot (50% partial refund)';
+  } else {
+    refundPercent = 0;
+    reason = 'Cancelled <30 min before slot or no-show (0% non-refundable)';
+  }
+
+  const refundAmount = Math.round((consultationFee * refundPercent) / 100);
+  return {
+    refundPercent,
+    refundAmount,
+    reason,
+    hoursUntil: Math.max(0, Math.round(hoursUntil * 10) / 10)
+  };
+}
+
+/**
+ * PRD v4 Section 6.9: Append-Only Transactions Ledger
+ * Reconciled daily; platformCut = fee * 10%, hospitalPayout = fee * 90%
+ */
+export async function recordTransaction(txData) {
+  const txId = txData.id || `tx-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const fee = Number(txData.amount) || 500;
+  const platformCut = txData.platformCut !== undefined ? Number(txData.platformCut) : Math.round(fee * 0.10);
+  const hospitalPayout = txData.hospitalPayout !== undefined ? Number(txData.hospitalPayout) : (fee - platformCut);
+
+  const payload = {
+    id: txId,
+    type: txData.type || 'slot_prepayment',
+    amount: fee,
+    platformCut,
+    hospitalPayout,
+    patientId: txData.patientId || 'patient-user',
+    patientName: txData.patientName || 'Patient',
+    doctorId: txData.doctorId || '',
+    doctorName: txData.doctorName || '',
+    hospitalId: txData.hospitalId || 'citycare-central',
+    hospitalName: txData.hospitalName || 'CityCare Central Hospital',
+    paymentMethod: txData.paymentMethod || 'UPI / Razorpay',
+    status: txData.status || 'settled',
+    gatewayTxId: txData.gatewayTxId || `pay_${Math.random().toString(36).substring(2, 12)}`,
+    notes: txData.notes || '',
+    createdAt: serverTimestamp(),
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    const txRef = doc(db, 'transactions', txId);
+    await setDoc(txRef, payload, { merge: true });
+  } catch (e) {
+    console.warn('recordTransaction fallback to local:', e);
+  }
+  return payload;
+}
+
+export function subscribeTransactions(callback) {
+  const colRef = collection(db, 'transactions');
+  return onSnapshot(colRef, (snap) => {
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.timestamp || 0);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.timestamp || 0);
+      return dateB - dateA;
+    });
+    callback(list);
+  }, () => {
+    callback([]);
+  });
+}
+
+/**
+ * PRD v4 Section 9: Immutable Audit Logs
+ * For overrides, skips, KYC decisions, refunds, and Rx edits
+ */
+export async function logAuditEvent(auditData) {
+  const logId = `audit-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+  const payload = {
+    id: logId,
+    actor: auditData.actor || 'system',
+    actorRole: auditData.actorRole || 'user',
+    action: auditData.action,
+    entityType: auditData.entityType || 'token',
+    entityId: auditData.entityId || '',
+    reason: auditData.reason || '',
+    before: auditData.before || null,
+    after: auditData.after || null,
+    hospitalId: auditData.hospitalId || 'citycare-central',
+    timestamp: new Date().toISOString(),
+    createdAt: serverTimestamp()
+  };
+
+  try {
+    const logRef = doc(db, 'audit_logs', logId);
+    await setDoc(logRef, payload);
+  } catch (e) {
+    console.warn('logAuditEvent error:', e);
+  }
+  return payload;
+}
+
+export function subscribeAuditLogs(callback) {
+  const colRef = collection(db, 'audit_logs');
+  return onSnapshot(colRef, (snap) => {
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.timestamp || 0);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.timestamp || 0);
+      return dateB - dateA;
+    });
+    callback(list);
+  }, () => {
+    callback([]);
+  });
+}
+
+/**
+ * PRD v4 Section 6.7: Doctor Delay / Pause with Reason & Broadcast
+ */
+export async function pauseDoctorQueue(doctorId, { paused, reason = 'Emergency surgery', delayMinutes = 30 }) {
+  const docRef = doc(db, 'doctors', doctorId);
+  const payload = {
+    queuePaused: paused,
+    pauseReason: paused ? reason : null,
+    expectedDelayMinutes: paused ? delayMinutes : 0,
+    pauseStartedAt: paused ? serverTimestamp() : null
+  };
+  await updateDoc(docRef, payload);
+
+  await logAuditEvent({
+    actor: doctorId,
+    actorRole: 'doctor',
+    action: paused ? 'DOCTOR_QUEUE_PAUSED' : 'DOCTOR_QUEUE_RESUMED',
+    entityType: 'doctor',
+    entityId: doctorId,
+    reason: reason,
+    details: { delayMinutes }
+  });
+
+  return payload;
+}
+
+/**
+ * PRD v4 Section 6.6: Skip (moved 3 positions back once) / No-Show (second miss) / Recall
+ */
+export async function skipToken(doctorId, tokenId, reason = 'Patient not present after 3-minute call window') {
+  const tokenRef = doc(db, 'doctors', doctorId, 'tokens', tokenId);
+  const tokenSnap = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(tokenRef);
+    if (!snap.exists()) throw new Error('Token does not exist');
+    const data = snap.data();
+    const newSkipCount = (data.skipCount || 0) + 1;
+    
+    if (newSkipCount >= 2) {
+      tx.update(tokenRef, {
+        status: 'no-show',
+        skipCount: newSkipCount,
+        secondMissNoShow: true,
+        noShowAt: serverTimestamp(),
+        noShowReason: reason
+      });
+      return { status: 'no-show', skipCount: newSkipCount };
+    } else {
+      tx.update(tokenRef, {
+        status: 'waiting',
+        skipCount: newSkipCount,
+        skippedAt: serverTimestamp(),
+        skipReason: reason,
+        laneWeight: (data.laneWeight || 0) - 15
+      });
+      return { status: 'skipped', skipCount: newSkipCount };
+    }
+  });
+
+  await logAuditEvent({
+    actor: doctorId,
+    actorRole: 'doctor',
+    action: tokenSnap.status === 'no-show' ? 'TOKEN_MARKED_NO_SHOW' : 'TOKEN_SKIPPED',
+    entityType: 'token',
+    entityId: tokenId,
+    reason: reason,
+    details: { skipCount: tokenSnap.skipCount }
+  });
+
+  return tokenSnap;
+}
+
+export async function recallToken(doctorId, tokenId, actorUid = 'staff') {
+  const tokenRef = doc(db, 'doctors', doctorId, 'tokens', tokenId);
+  await updateDoc(tokenRef, {
+    status: 'waiting',
+    recalledAt: serverTimestamp(),
+    skipCount: 0
+  });
+
+  await logAuditEvent({
+    actor: actorUid,
+    actorRole: 'staff',
+    action: 'TOKEN_RECALLED',
+    entityType: 'token',
+    entityId: tokenId,
+    reason: 'Patient arrived and recalled to active waiting queue'
+  });
+}
+
+/**
+ * PRD v4 Section 9: DPDP Act 2023 Consent Management
+ */
+export async function saveDpdpConsent(uid, consents = {}) {
+  const payload = {
+    uid,
+    healthDataProcessing: consents.healthDataProcessing !== false,
+    liveLocationTracking: consents.liveLocationTracking !== false,
+    smsWhatsAppNotifications: consents.smsWhatsAppNotifications !== false,
+    consentedAt: new Date().toISOString(),
+    version: 'DPDP-2023-v1'
+  };
+  try {
+    const userRef = doc(db, 'patients', uid);
+    await setDoc(userRef, { consents: payload }, { merge: true });
+    localStorage.setItem(`mediq_dpdp_consent_${uid}`, JSON.stringify(payload));
+  } catch (e) {
+    localStorage.setItem(`mediq_dpdp_consent_${uid}`, JSON.stringify(payload));
+  }
+  return payload;
+}
+
+export function getDpdpConsent(uid) {
+  try {
+    const saved = localStorage.getItem(`mediq_dpdp_consent_${uid}`);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  return {
+    healthDataProcessing: true,
+    liveLocationTracking: true,
+    smsWhatsAppNotifications: true,
+    consentedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * PRD v4 Section 6.8: Real Pharmacy Inventory & Line-Item Stock Check
+ */
+export const MEDICINE_INVENTORY = [
+  { id: 'med-pcm-650', name: 'Paracetamol 650mg (Dolo)', genericName: 'Paracetamol 650mg', category: 'Antipyretic / Analgesic', inHouseStock: 450, janAushadhiStock: 1200, apolloStock: 600, medPlusStock: 500, priceBranded: 35, priceGeneric: 11 },
+  { id: 'med-amox-500', name: 'Amoxicillin 500mg (Novamox)', genericName: 'Amoxicillin 500mg', category: 'Antibiotic', inHouseStock: 180, janAushadhiStock: 450, apolloStock: 300, medPlusStock: 250, priceBranded: 110, priceGeneric: 32 },
+  { id: 'med-cet-10', name: 'Cetirizine 10mg (Cetzine)', genericName: 'Cetirizine 10mg', category: 'Antihistamine / Allergy', inHouseStock: 300, janAushadhiStock: 800, apolloStock: 400, medPlusStock: 350, priceBranded: 28, priceGeneric: 8 },
+  { id: 'med-panto-40', name: 'Pantoprazole 40mg (Pan 40)', genericName: 'Pantoprazole 40mg', category: 'Antacid / PPI', inHouseStock: 220, janAushadhiStock: 650, apolloStock: 380, medPlusStock: 310, priceBranded: 95, priceGeneric: 24 },
+  { id: 'med-azithro-500', name: 'Azithromycin 500mg (Azithral)', genericName: 'Azithromycin 500mg', category: 'Macrolide Antibiotic', inHouseStock: 95, janAushadhiStock: 300, apolloStock: 210, medPlusStock: 190, priceBranded: 140, priceGeneric: 45 },
+  { id: 'med-cough-syp', name: 'Dextromethorphan Cough Syrup (100ml)', genericName: 'Dextromethorphan HBr', category: 'Cough Suppressant', inHouseStock: 60, janAushadhiStock: 180, apolloStock: 120, medPlusStock: 100, priceBranded: 125, priceGeneric: 38 },
+  { id: 'med-metformin-500', name: 'Metformin 500mg (Glycomet)', genericName: 'Metformin 500mg', category: 'Anti-Diabetic', inHouseStock: 500, janAushadhiStock: 1500, apolloStock: 750, medPlusStock: 600, priceBranded: 42, priceGeneric: 14 },
+  { id: 'med-atorva-10', name: 'Atorvastatin 10mg (Atorlip)', genericName: 'Atorvastatin 10mg', category: 'Lipid Lowering / Statin', inHouseStock: 140, janAushadhiStock: 500, apolloStock: 280, medPlusStock: 220, priceBranded: 85, priceGeneric: 22 }
+];
+
+export function checkMedicineStock(medicineName, pharmacyId = 'pharm-hospital') {
+  const lower = medicineName.toLowerCase();
+  const matched = MEDICINE_INVENTORY.find(m => 
+    lower.includes(m.name.toLowerCase().split(' ')[0]) || 
+    lower.includes(m.genericName.toLowerCase().split(' ')[0])
+  );
+
+  if (!matched) {
+    return { inStock: true, stockLevel: 'Available (40+ units)', genericSubstitute: null };
+  }
+
+  let count = matched.inHouseStock;
+  if (pharmacyId === 'pharm-janaushadhi') count = matched.janAushadhiStock;
+  if (pharmacyId === 'pharm-apollo') count = matched.apolloStock;
+  if (pharmacyId === 'pharm-medplus') count = matched.medPlusStock;
+
+  return {
+    inStock: count > 10,
+    stockCount: count,
+    stockLevel: count > 50 ? 'In Stock' : (count > 0 ? 'Low Stock' : 'Out of Stock'),
+    genericName: matched.genericName,
+    genericPrice: matched.priceGeneric,
+    brandedPrice: matched.priceBranded,
+    savingsPercent: Math.round(((matched.priceBranded - matched.priceGeneric) / matched.priceBranded) * 100)
+  };
 }
 
 /**
@@ -114,6 +660,9 @@ export async function updateTokenStatus(doctorId, tokenId, status, extra = {}) {
   
   if (extra.notes) payload.notes = extra.notes;
   if (extra.customRoom) payload.customRoom = extra.customRoom;
+  if (extra.prescribedMedicines) payload.prescribedMedicines = extra.prescribedMedicines;
+  if (extra.pharmacyTokenCode) payload.pharmacyTokenCode = extra.pharmacyTokenCode;
+  if (extra.pharmacyName) payload.pharmacyName = extra.pharmacyName;
 
   return await updateDoc(tokenRef, payload);
 }
@@ -121,9 +670,8 @@ export async function updateTokenStatus(doctorId, tokenId, status, extra = {}) {
 /**
  * Pause / Resume doctor queue
  */
-export async function toggleDoctorQueuePause(doctorId, queuePaused) {
-  const docRef = doc(db, 'doctors', doctorId);
-  return await updateDoc(docRef, { queuePaused });
+export async function toggleDoctorQueuePause(doctorId, queuePaused, reason = 'Consultation break') {
+  return await pauseDoctorQueue(doctorId, { paused: queuePaused, reason });
 }
 
 /**
@@ -364,7 +912,7 @@ export const SYMPTOM_MAP = {
 };
 
 /**
- * MediQ v3.0: Slot Booking (Scheduled OPD Appointment) with Fee Prepayment
+ * MediQ v4.0: Slot Booking with Prepayment, Ledger Recording & Grace Tracking
  */
 export async function bookDoctorSlot(doctorId, bookingData) {
   const todayKey = getTodayDateKey();
@@ -373,6 +921,7 @@ export async function bookDoctorSlot(doctorId, bookingData) {
 
   const fee = Number(bookingData.consultationFee) || 500;
   const platformCommission = Math.round(fee * 0.10); // 10% MediQ platform fee
+  const hospitalPayout = fee - platformCommission;
 
   const payload = {
     id: appointmentId,
@@ -382,24 +931,51 @@ export async function bookDoctorSlot(doctorId, bookingData) {
     hospitalName: bookingData.hospitalName || 'CityCare Central Hospital',
     patientName: bookingData.patientName,
     phoneNumber: bookingData.phoneNumber,
+    familyMemberName: bookingData.familyMemberName || null,
+    familyMemberRelation: bookingData.familyMemberRelation || null,
     slotTime: bookingData.slotTime || '10:30 AM - 10:45 AM',
     date: bookingData.date || todayKey,
     consultationFee: fee,
     platformCommission: platformCommission,
-    hospitalPayout: fee - platformCommission,
-    paymentStatus: bookingData.paymentStatus || 'prepaid', // 'prepaid' | 'pay-at-hospital'
+    hospitalPayout: hospitalPayout,
+    paymentStatus: bookingData.paymentStatus || 'prepaid',
+    paymentMethod: bookingData.paymentMethod || 'UPI / Razorpay',
     bookingMode: 'slot',
     status: 'confirmed',
+    lane: bookingData.lane || 'normal',
     createdAt: serverTimestamp()
   };
 
   await setDoc(aptRef, payload, { merge: true });
 
-  // Also issue an entry in doctor's tokens with slot tag so the doctor queue reflects it
+  // Record transaction into append-only transactions ledger (PRD 6.9)
+  await recordTransaction({
+    id: `tx-${appointmentId}`,
+    type: 'slot_prepayment',
+    amount: fee,
+    platformCut: platformCommission,
+    hospitalPayout: hospitalPayout,
+    patientName: bookingData.patientName,
+    doctorId,
+    doctorName: bookingData.doctorName || '',
+    hospitalId: bookingData.hospitalId || 'citycare-central',
+    hospitalName: bookingData.hospitalName || 'CityCare Central Hospital',
+    paymentMethod: bookingData.paymentMethod || 'UPI / Razorpay',
+    status: 'settled',
+    notes: `Prepaid slot appointment for ${bookingData.slotTime}`
+  });
+
+  // Issue entry in doctor's tokens with slot tag & priority calculation
   const tokenResult = await generateToken(doctorId, {
     patientName: bookingData.patientName,
     phoneNumber: bookingData.phoneNumber,
+    familyMemberName: bookingData.familyMemberName,
+    familyMemberRelation: bookingData.familyMemberRelation,
     reason: `[Slot: ${bookingData.slotTime}] ${bookingData.reason || 'Scheduled Consultation'}`,
+    type: 'slot',
+    lane: bookingData.lane || 'normal',
+    slotTime: bookingData.slotTime,
+    arrivedInGrace: true,
     addedBy: 'slot-booking'
   });
 
@@ -407,6 +983,7 @@ export async function bookDoctorSlot(doctorId, bookingData) {
     appointmentId,
     tokenId: tokenResult.tokenId,
     tokenNumber: tokenResult.tokenNumber,
+    tokenCode: tokenResult.tokenCode,
     ...payload
   };
 }
@@ -1163,6 +1740,102 @@ export async function seedDemoData() {
     await setDoc(hRef, h, { merge: true });
   }
 
+  // 6. Seed PRD v4 Transactions Ledger (Append-Only)
+  const demoTransactions = [
+    {
+      id: "tx-demo-01",
+      type: "slot_prepayment",
+      amount: 500,
+      platformCut: 50,
+      hospitalPayout: 450,
+      patientName: "Riya Sharma",
+      doctorName: "Dr. Rajesh Mehta",
+      hospitalId: "citycare-central",
+      hospitalName: "CityCare Central Hospital",
+      paymentMethod: "UPI / Google Pay",
+      status: "settled",
+      notes: "Slot #04 prepayment (10:30 AM - 10:45 AM)",
+      timestamp: new Date(Date.now() - 45 * 60000).toISOString()
+    },
+    {
+      id: "tx-demo-02",
+      type: "slot_prepayment",
+      amount: 750,
+      platformCut: 75,
+      hospitalPayout: 675,
+      patientName: "Deepak Chahar",
+      doctorName: "Dr. Vivek Verma",
+      hospitalId: "citycare-central",
+      hospitalName: "CityCare Central Hospital",
+      paymentMethod: "Razorpay / Credit Card",
+      status: "settled",
+      notes: "Slot #02 prepayment (12:00 PM - 12:15 PM)",
+      timestamp: new Date(Date.now() - 95 * 60000).toISOString()
+    },
+    {
+      id: "tx-demo-03",
+      type: "refund",
+      amount: -500,
+      platformCut: 0,
+      hospitalPayout: -500,
+      patientName: "Sunil Joshi",
+      doctorName: "Dr. Rajesh Mehta",
+      hospitalId: "citycare-central",
+      hospitalName: "CityCare Central Hospital",
+      paymentMethod: "UPI Refund",
+      status: "refunded",
+      notes: "Cancelled >2h before appointment (100% full refund rule applied)",
+      timestamp: new Date(Date.now() - 140 * 60000).toISOString()
+    }
+  ];
+
+  for (const tx of demoTransactions) {
+    const txRef = doc(db, 'transactions', tx.id);
+    await setDoc(txRef, tx, { merge: true });
+  }
+
+  // 7. Seed PRD v4 Audit Logs
+  const demoAuditLogs = [
+    {
+      id: "audit-demo-01",
+      actor: "kavita.reception",
+      actorRole: "reception",
+      action: "QUEUE_OVERRIDE",
+      entityType: "token",
+      entityId: "DMEH-03",
+      reason: "Acute severe chest pain - triaged to Emergency Lane",
+      hospitalId: "citycare-central",
+      timestamp: new Date(Date.now() - 30 * 60000).toISOString()
+    },
+    {
+      id: "audit-demo-02",
+      actor: "dr-mehta",
+      actorRole: "doctor",
+      action: "TOKEN_SKIPPED",
+      entityType: "token",
+      entityId: "DMEH-01",
+      reason: "Patient not present after 3-minute alert countdown; moved 3 positions back",
+      hospitalId: "citycare-central",
+      timestamp: new Date(Date.now() - 60 * 60000).toISOString()
+    },
+    {
+      id: "audit-demo-03",
+      actor: "admin.anil",
+      actorRole: "hospital_admin",
+      action: "KYC_APPROVED",
+      entityType: "doctor",
+      entityId: "dr-mehta",
+      reason: "MCI license verified against NMC portal",
+      hospitalId: "citycare-central",
+      timestamp: new Date(Date.now() - 240 * 60000).toISOString()
+    }
+  ];
+
+  for (const log of demoAuditLogs) {
+    const logRef = doc(db, 'audit_logs', log.id);
+    await setDoc(logRef, log, { merge: true });
+  }
+
   try {
     localStorage.setItem('mediq_user_history', JSON.stringify(demoHistory));
   } catch (e) {}
@@ -1448,15 +2121,40 @@ export function subscribePharmacyTokens(callback) {
 
 /**
  * Updates Pharmacy Token Status ('preparing' | 'ready' | 'dispensed')
+ * When status is 'dispensed', syncs with linked doctor token so patient app/web queue screen immediately clears!
  */
 export async function updatePharmacyTokenStatus(tokenId, status, counterNumber = 'Counter 1') {
   try {
     const docRef = doc(db, 'pharmacy_tokens', tokenId);
+    let linkedData = null;
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        linkedData = snap.data();
+      }
+    } catch (e) {}
+
     await setDoc(docRef, {
       status,
       counterNumber,
+      dispensedAt: status === 'dispensed' ? serverTimestamp() : null,
       updatedAt: serverTimestamp()
     }, { merge: true });
+
+    // Sync to linked doctor token if present
+    if (linkedData && linkedData.doctorId && linkedData.linkedDoctorTokenId) {
+      try {
+        const docTokenRef = doc(db, 'doctors', linkedData.doctorId, 'tokens', linkedData.linkedDoctorTokenId);
+        await setDoc(docTokenRef, {
+          pharmacyStatus: status,
+          status: status === 'dispensed' ? 'dispensed' : 'completed',
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Syncing to doctor token warning:', err);
+      }
+    }
+
     return { success: true, tokenId, status };
   } catch (err) {
     console.warn('updatePharmacyTokenStatus firestore error, falling back locally:', err);

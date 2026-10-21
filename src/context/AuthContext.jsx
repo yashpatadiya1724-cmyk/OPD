@@ -23,12 +23,29 @@ const DEMO_ACCOUNTS = {
     email: 'riya.sharma@gmail.com',
     phoneNumber: '9876543210',
     role: 'patient',
+    lane: 'normal',
     photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     isGoogle: true,
     bloodGroup: 'B+',
     emergencyContact: '9876500000 (Husband - Alok)',
     address: 'Indiranagar 4th Cross, Bengaluru',
-    abdmId: 'ABDM-91-8273-4410'
+    abdmId: 'ABDM-91-8273-4410',
+    claims: { role: 'patient', hospitalId: 'citycare-central' }
+  },
+  senior: {
+    uid: 'demo-senior-ramesh',
+    displayName: 'Ramesh Kumar (Senior, 68)',
+    email: 'ramesh.senior@family.in',
+    phoneNumber: '9844112233',
+    role: 'patient',
+    lane: 'senior',
+    isSenior: true,
+    photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    isGoogle: false,
+    bloodGroup: 'O+',
+    emergencyContact: '9876543210 (Daughter - Riya)',
+    address: 'Sector 14, Ring Road, New Delhi',
+    claims: { role: 'patient', lane: 'senior', hospitalId: 'citycare-central' }
   },
   doctor: {
     uid: 'dr-mehta',
@@ -45,30 +62,59 @@ const DEMO_ACCOUNTS = {
     experienceYears: 14,
     hospitalId: 'citycare-central',
     hospitalName: 'CityCare Central Hospital',
-    roomNumber: 'Room 102'
+    roomNumber: 'Room 102',
+    claims: { role: 'doctor', hospitalId: 'citycare-central' }
   },
   reception: {
-    uid: 'demo-staff-anil',
-    displayName: 'Anil Deshpande',
-    email: 'anil.reception@citycare.com',
+    uid: 'demo-staff-kavita',
+    displayName: 'Kavita Patil (Front Desk)',
+    email: 'kavita.desk@citycare.com',
     phoneNumber: '9811223344',
     role: 'reception',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    photoURL: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
     isGoogle: false,
-    deskName: 'Main OPD Triage Desk #1',
+    deskName: 'Main OPD Triage & Check-in Desk #1',
     hospitalId: 'citycare-central',
-    hospitalName: 'CityCare Central Hospital'
+    hospitalName: 'CityCare Central Hospital',
+    claims: { role: 'reception', hospitalId: 'citycare-central' }
+  },
+  pharmacy: {
+    uid: 'demo-staff-suresh',
+    displayName: 'Suresh Gupta (Pharmacist)',
+    email: 'suresh.pharmacy@citycare.com',
+    phoneNumber: '9833445566',
+    role: 'pharmacy',
+    photoURL: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80',
+    isGoogle: false,
+    counterName: 'Hospital Main Pharmacy Counter 1',
+    hospitalId: 'citycare-central',
+    hospitalName: 'CityCare Central Hospital',
+    claims: { role: 'pharmacy', hospitalId: 'citycare-central' }
   },
   admin: {
-    uid: 'demo-admin-sunita',
-    displayName: 'Sunita Rao',
-    email: 'sunita.admin@mediq.health',
-    phoneNumber: '9899887766',
+    uid: 'demo-admin-anil',
+    displayName: 'Admin Anil Deshpande',
+    email: 'anil.admin@citycare.com',
+    phoneNumber: '9877665544',
     role: 'admin',
+    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    isGoogle: false,
+    designation: 'Medical Superintendent & Hospital Admin',
+    hospitalId: 'citycare-central',
+    hospitalName: 'CityCare Central Hospital',
+    claims: { role: 'admin', hospitalId: 'citycare-central' }
+  },
+  super_admin: {
+    uid: 'demo-superadmin-sunita',
+    displayName: 'Sunita Rao (Super Admin)',
+    email: 'sunita.platform@mediq.health',
+    phoneNumber: '9899887766',
+    role: 'super_admin',
     photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     isGoogle: true,
-    designation: 'VP of Hospital Operations & Super Admin',
-    platformAccess: 'Full GMV & KYC Approval Access'
+    designation: 'VP of Platform Operations & Founder',
+    platformAccess: 'Full GMV, Onboarding & Settlement Access',
+    claims: { role: 'super_admin' }
   }
 };
 
@@ -76,10 +122,13 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const cached = localStorage.getItem('mediq_current_user');
-      if (cached) return JSON.parse(cached);
+      // Only restore if user explicitly logged in (has a 'loggedIn' flag)
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && (parsed.loggedIn || parsed.uid)) return parsed;
+      }
     } catch (e) {}
-    // Default starting demo account is Patient (Riya Sharma)
-    return DEMO_ACCOUNTS.patient;
+    return null;
   });
 
   const [loading, setLoading] = useState(true);
@@ -187,9 +236,9 @@ export function AuthProvider({ children }) {
           console.warn('Firestore user save warning:', e);
         }
 
-        setCurrentUser(roleData);
+        setCurrentUser({ ...roleData, loggedIn: true });
         setIsAuthModalOpen(false);
-        return roleData;
+        return { ...roleData, loggedIn: true };
       }
     } catch (error) {
       console.error('Google Sign-in error:', error);
@@ -216,9 +265,9 @@ export function AuthProvider({ children }) {
           isGoogle: false,
           ...data
         };
-        setCurrentUser(fullUser);
+        setCurrentUser({ ...fullUser, loggedIn: true });
         setIsAuthModalOpen(false);
-        return fullUser;
+        return { ...fullUser, loggedIn: true };
       } catch (authErr) {
         // Fallback for demo emails if not yet registered in Firebase Auth
         const simulated = {
@@ -229,9 +278,9 @@ export function AuthProvider({ children }) {
           isGoogle: false,
           phoneNumber: '9876543210'
         };
-        setCurrentUser(simulated);
+        setCurrentUser({ ...simulated, loggedIn: true });
         setIsAuthModalOpen(false);
-        return simulated;
+        return { ...simulated, loggedIn: true };
       }
     } catch (err) {
       console.error('Email login error:', err);
@@ -272,9 +321,9 @@ export function AuthProvider({ children }) {
         }, { merge: true });
       } catch (e) {}
 
-      setCurrentUser(newUserData);
+      setCurrentUser({ ...newUserData, loggedIn: true });
       setIsAuthModalOpen(false);
-      return newUserData;
+      return { ...newUserData, loggedIn: true };
     } catch (err) {
       console.error('Register error:', err);
       throw err;
@@ -286,9 +335,10 @@ export function AuthProvider({ children }) {
    */
   const switchDemoAccount = (roleKey) => {
     if (DEMO_ACCOUNTS[roleKey]) {
-      setCurrentUser(DEMO_ACCOUNTS[roleKey]);
+      const user = { ...DEMO_ACCOUNTS[roleKey], loggedIn: true };
+      setCurrentUser(user);
       setIsAuthModalOpen(false);
-      return DEMO_ACCOUNTS[roleKey];
+      return user;
     }
   };
 

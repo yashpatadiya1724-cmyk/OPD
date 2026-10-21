@@ -23,24 +23,83 @@ import {
   Navigation,
   ShieldCheck,
   Zap,
-  X
+  X,
+  Plane,
+  Bike,
+  Box,
+  AlertTriangle,
+  Calendar
 } from 'lucide-react';
 import { 
   subscribePharmacyTokens, 
   updatePharmacyTokenStatus,
   createPharmacyToken,
-  getPharmacyPriceComparison
+  getPharmacyPriceComparison,
+  checkMedicineStock,
+  MEDICINE_INVENTORY
 } from '../firebase';
 import { playChime } from '../utils/audio';
 
 export default function PharmacyConsole() {
   const [tokens, setTokens] = useState([]);
-  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'comparison' | 'simulator'
+  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'comparison' | 'simulator' | 'inventory' | 'dispatch'
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPharmacyFilter, setSelectedPharmacyFilter] = useState('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all'); // 'all' | 'preparing' | 'ready' | 'dispensed'
   const [selectedCounter, setSelectedCounter] = useState('Counter 1 (Main Atrium)');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Micro-Dark Store Inventory State (PRD v5 F23)
+  const [inventoryList, setInventoryList] = useState([
+    { id: 'med-pcm-650', name: 'Paracetamol 650mg (Dolo)', genericName: 'Paracetamol 650mg IP', category: 'Antipyretic / Analgesic', batchNo: 'BT-9821', expiryDate: '2027-08', inHouseStock: 450, janAushadhiStock: 1200, mrp: 35, costPrice: 22, unit: 'Strips (15 Tabs)' },
+    { id: 'med-amox-500', name: 'Amoxicillin 500mg (Novamox)', genericName: 'Amoxicillin 500mg', category: 'Antibiotic', batchNo: 'AM-4029', expiryDate: '2026-12', inHouseStock: 180, janAushadhiStock: 450, mrp: 110, costPrice: 72, unit: 'Strips (10 Caps)' },
+    { id: 'med-cet-10', name: 'Cetirizine 10mg (Cetzine)', genericName: 'Cetirizine 10mg', category: 'Antihistamine / Allergy', batchNo: 'CZ-1102', expiryDate: '2027-04', inHouseStock: 300, janAushadhiStock: 800, mrp: 28, costPrice: 15, unit: 'Strips (10 Tabs)' },
+    { id: 'med-panto-40', name: 'Pantoprazole 40mg (Pan 40)', genericName: 'Pantoprazole 40mg', category: 'Antacid / PPI', batchNo: 'PT-8832', expiryDate: '2026-11', inHouseStock: 220, janAushadhiStock: 650, mrp: 95, costPrice: 58, unit: 'Strips (10 Tabs)' },
+    { id: 'med-azithro-500', name: 'Azithromycin 500mg (Azithral)', genericName: 'Azithromycin 500mg', category: 'Macrolide Antibiotic', batchNo: 'AZ-7721', expiryDate: '2026-10-31', inHouseStock: 42, janAushadhiStock: 300, mrp: 140, costPrice: 90, unit: 'Strips (3 Tabs)', expiringSoon: true },
+    { id: 'med-insulin-r', name: 'Human Actrapid Insulin 40IU/ml', genericName: 'Regular Human Insulin IP', category: 'Cold-Chain Biological (2-8°C)', batchNo: 'IN-3390', expiryDate: '2027-02', inHouseStock: 65, janAushadhiStock: 120, mrp: 175, costPrice: 130, unit: 'Vial (10ml)', isColdChain: true },
+    { id: 'med-antivenom', name: 'Polyvalent Snake Antivenom 10ml', genericName: 'Equine Snake Venom Antiserum', category: 'Emergency Biological (Cold Chain)', batchNo: 'AV-0012', expiryDate: '2027-09', inHouseStock: 18, janAushadhiStock: 25, mrp: 600, costPrice: 480, unit: 'Vial', isColdChain: true, lowStock: true }
+  ]);
+
+  const [showStockInModal, setShowStockInModal] = useState(false);
+  const [stockInForm, setStockInForm] = useState({
+    name: 'Augmentin 625mg',
+    genericName: 'Amoxicillin + Potassium Clavulanate',
+    category: 'Antibiotic',
+    batchNo: 'AG-9912',
+    expiryDate: '2027-10',
+    quantity: 100,
+    mrp: 220,
+    costPrice: 145,
+    unit: 'Strips (10 Tabs)'
+  });
+
+  // Hyperlocal Dispatch Orders (Blinkit 10-min + Emergency Drone)
+  const [dispatchOrders, setDispatchOrders] = useState([
+    {
+      id: 'disp-01',
+      patientName: 'Ravi Kumar Patel',
+      address: 'B-402, Shivalik Residency, Near Sola',
+      medicines: ['Human Actrapid Insulin 40IU', 'Paracetamol 650mg'],
+      mode: 'drone',
+      status: 'IN_FLIGHT',
+      droneTelemetry: { altitude: '78m', speed: '46 km/h', temp: '4.2°C' },
+      etaMinutes: 6,
+      totalAmount: 224,
+      placedAt: '4 mins ago'
+    },
+    {
+      id: 'disp-02',
+      patientName: 'Priya Shah',
+      address: 'Plot 18, Sun City, Drive-In Road',
+      medicines: ['Pan 40', 'Cetzine 10mg'],
+      mode: 'bike',
+      riderName: 'Suresh Patel (EV-04)',
+      status: 'PACKING',
+      etaMinutes: 9,
+      totalAmount: 123,
+      placedAt: '1 min ago'
+    }
+  ]);
 
   // Walk-in Rx Modal state
   const [showWalkinModal, setShowWalkinModal] = useState(false);
@@ -390,6 +449,46 @@ export default function PharmacyConsole() {
         >
           <Sparkles size={18} />
           <span>Medicine Cost &amp; Generic Savings Calculator</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('inventory')}
+          style={{
+            padding: '0.65rem 1.35rem',
+            borderRadius: '12px',
+            border: activeTab === 'inventory' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+            background: activeTab === 'inventory' ? '#0284c7' : '#fff',
+            color: activeTab === 'inventory' ? '#fff' : '#334155',
+            fontWeight: 900,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
+        >
+          <Box size={18} />
+          <span>Dark Store Inventory ({inventoryList.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('dispatch')}
+          style={{
+            padding: '0.65rem 1.35rem',
+            borderRadius: '12px',
+            border: activeTab === 'dispatch' ? '2px solid #059669' : '1px solid #cbd5e1',
+            background: activeTab === 'dispatch' ? '#059669' : '#fff',
+            color: activeTab === 'dispatch' ? '#fff' : '#334155',
+            fontWeight: 900,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
+        >
+          <Plane size={18} />
+          <span>Drone &amp; Blinkit Dispatch ({dispatchOrders.length})</span>
         </button>
       </div>
 
@@ -977,6 +1076,519 @@ export default function PharmacyConsole() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: Micro-Dark Store Inventory & Batch Stock-In (PRD v5 Module B / F23) */}
+      {activeTab === 'inventory' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Inventory Top Metrics */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1.25rem'
+          }}>
+            <div className="glass-card" style={{ padding: '1.35rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800 }}>TOTAL INVENTORY SKUs</span>
+              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0284c7', margin: '0.2rem 0' }}>
+                {inventoryList.length} Items
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700 }}>
+                Central Master Formulary Synced
+              </span>
+            </div>
+
+            <div className="glass-card" style={{ padding: '1.35rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800 }}>JAN AUSHADHI GENERIC RATIO</span>
+              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#059669', margin: '0.2rem 0' }}>
+                70.9%
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700 }}>
+                Average Out-of-Pocket Savings
+              </span>
+            </div>
+
+            <div className="glass-card" style={{ padding: '1.35rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800 }}>COLD-CHAIN BIOLOGICALS</span>
+              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#7c3aed', margin: '0.2rem 0' }}>
+                2 Active Lots
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: 700 }}>
+                Insulin &amp; Antivenom (2–8°C)
+              </span>
+            </div>
+
+            <div className="glass-card" style={{ padding: '1.35rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800 }}>EXPIRING &amp; LOW STOCK ALERTS</span>
+              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#e11d48', margin: '0.2rem 0' }}>
+                2 Lots Flagged
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#e11d48', fontWeight: 700 }}>
+                Action required within 30 days
+              </span>
+            </div>
+          </div>
+
+          {/* Inventory Table Container */}
+          <div className="glass-card" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
+                  Micro-Dark Store Inventory &amp; Batch Ledger
+                </h3>
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+                  Real-time stock across hospital counter, Jan Aushadhi generic reserves, and retail dark-stores.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowStockInModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '10px',
+                  fontWeight: 900,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)'
+                }}
+              >
+                <Plus size={18} />
+                <span>+ Stock-In New Batch (F23)</span>
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', fontSize: '0.76rem', fontWeight: 900, textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.75rem' }}>Medicine Brand &amp; Salt</th>
+                    <th style={{ padding: '0.75rem' }}>Batch &amp; Expiry</th>
+                    <th style={{ padding: '0.75rem' }}>In-House Counter</th>
+                    <th style={{ padding: '0.75rem' }}>Jan Aushadhi Generic</th>
+                    <th style={{ padding: '0.75rem' }}>MRP / Cost</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'right' }}>Quick Adjust</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryList.map((item) => (
+                    <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.85rem 0.75rem' }}>
+                        <div style={{ fontWeight: 900, color: '#0f172a' }}>{item.name}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.genericName}</div>
+                        <span style={{
+                          fontSize: '0.68rem',
+                          background: item.isColdChain ? 'rgba(124, 58, 237, 0.1)' : 'rgba(2, 132, 199, 0.1)',
+                          color: item.isColdChain ? '#7c3aed' : '#0284c7',
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '4px',
+                          fontWeight: 800,
+                          display: 'inline-block',
+                          marginTop: '3px'
+                        }}>
+                          {item.category}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '0.85rem 0.75rem' }}>
+                        <div style={{ fontWeight: 800, color: '#334155', fontFamily: 'monospace' }}>{item.batchNo}</div>
+                        <div style={{ fontSize: '0.78rem', color: item.expiringSoon ? '#e11d48' : '#64748b', fontWeight: item.expiringSoon ? 900 : 600 }}>
+                          Exp: {item.expiryDate} {item.expiringSoon && '⚠️ EXPIRING SOON'}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '0.85rem 0.75rem' }}>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: item.lowStock ? '#e11d48' : '#0f172a' }}>
+                          {item.inHouseStock} {item.unit.split(' ')[0]}
+                        </div>
+                        {item.lowStock && (
+                          <span style={{ fontSize: '0.68rem', color: '#e11d48', fontWeight: 900 }}>
+                            ● BUFFER LOW (&lt;50)
+                          </span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '0.85rem 0.75rem' }}>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#059669' }}>
+                          {item.janAushadhiStock} {item.unit.split(' ')[0]}
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 700 }}>
+                          PMBJP Stock Verified
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '0.85rem 0.75rem' }}>
+                        <div style={{ fontWeight: 900, color: '#0f172a' }}>₹{item.mrp}</div>
+                        <div style={{ fontSize: '0.76rem', color: '#64748b' }}>Cost: ₹{item.costPrice}</div>
+                      </td>
+
+                      <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+                          <button
+                            onClick={() => {
+                              setInventoryList(prev => prev.map(i => i.id === item.id ? { ...i, inHouseStock: i.inHouseStock + 10 } : i));
+                            }}
+                            style={{
+                              background: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              padding: '0.3rem 0.6rem',
+                              borderRadius: '6px',
+                              fontWeight: 900,
+                              fontSize: '0.75rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            +10 In
+                          </button>
+                          <button
+                            onClick={() => {
+                              setInventoryList(prev => prev.map(i => i.id === item.id ? { ...i, inHouseStock: Math.max(0, i.inHouseStock - 1) } : i));
+                            }}
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fca5a5',
+                              color: '#b91c1c',
+                              padding: '0.3rem 0.6rem',
+                              borderRadius: '6px',
+                              fontWeight: 900,
+                              fontSize: '0.75rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            -1 Dispense
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* TAB 5: Drone & Blinkit Dispatch Station (PRD v5 Module B / Poster Item 3) */}
+      {activeTab === 'dispatch' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          <div className="glass-card" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                  <Plane size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
+                    Hyperlocal Dark-Store &amp; Drone Dispatch Station
+                  </h3>
+                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+                    Live management of outgoing 10-minute bike deliveries and temperature-controlled drone flights.
+                  </p>
+                </div>
+              </div>
+
+              <span style={{ background: '#dcfce7', color: '#166534', padding: '0.25rem 0.65rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 900 }}>
+                ● DISPATCH ENGINE ONLINE
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {dispatchOrders.map((order) => (
+                <div
+                  key={order.id}
+                  style={{
+                    background: '#ffffff',
+                    border: order.mode === 'drone' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>
+                        {order.mode === 'drone' ? '🚁' : '🛵'}
+                      </span>
+                      <strong style={{ fontSize: '1rem', color: '#0f172a' }}>
+                        {order.patientName} &bull; Order #{order.id}
+                      </strong>
+                      <span style={{
+                        background: order.status === 'IN_FLIGHT' ? '#dbeafe' : '#fef3c7',
+                        color: order.status === 'IN_FLIGHT' ? '#1d4ed8' : '#92400e',
+                        fontSize: '0.72rem',
+                        fontWeight: 900,
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '6px'
+                      }}>
+                        {order.status === 'IN_FLIGHT' ? '🚁 DRONE IN AIR' : '📦 PHARMACIST PACKING'}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '4px' }}>
+                      📍 {order.address} &bull; Placed: {order.placedAt}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '6px' }}>
+                      {order.medicines.map((m, idx) => (
+                        <span key={idx} style={{ background: '#f1f5f9', color: '#334155', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.74rem', fontWeight: 700 }}>
+                          💊 {m}
+                        </span>
+                      ))}
+                    </div>
+
+                    {order.mode === 'drone' && order.droneTelemetry && (
+                      <div style={{ marginTop: '8px', fontSize: '0.76rem', color: '#0369a1', fontWeight: 800 }}>
+                        Telemetry: Altitude {order.droneTelemetry.altitude} &bull; Speed {order.droneTelemetry.speed} &bull; Cold-Chain Temp {order.droneTelemetry.temp} (Active Cooling)
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800 }}>TOTAL AMOUNT</span>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+                        ₹{order.totalAmount}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 800 }}>
+                        ETA: ~{order.etaMinutes} mins
+                      </span>
+                    </div>
+
+                    {order.status === 'PACKING' ? (
+                      <button
+                        onClick={() => {
+                          setDispatchOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'IN_FLIGHT' } : o));
+                          playChime();
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.65rem 1.15rem',
+                          borderRadius: '8px',
+                          fontWeight: 900,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ✓ Pack &amp; Handover to Rider
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setDispatchOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'DELIVERED', etaMinutes: 0 } : o));
+                        }}
+                        style={{
+                          background: '#0284c7',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.65rem 1.15rem',
+                          borderRadius: '8px',
+                          fontWeight: 900,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Mark Touchdown Delivered ✓
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* STOCK-IN BATCH MODAL (F23) */}
+      {showStockInModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem'
+          }}
+          onClick={() => setShowStockInModal(false)}
+        >
+          <div
+            className="glass-card"
+            style={{
+              background: '#ffffff',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '1.75rem',
+              borderRadius: '16px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              color: '#0f172a'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Box size={22} color="#0284c7" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900 }}>
+                  Stock-In New Batch (PRD v5 F23)
+                </h3>
+              </div>
+              <button onClick={() => setShowStockInModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const newEntry = {
+                  id: `med-${Date.now()}`,
+                  name: stockInForm.name,
+                  genericName: stockInForm.genericName,
+                  category: stockInForm.category,
+                  batchNo: stockInForm.batchNo,
+                  expiryDate: stockInForm.expiryDate,
+                  inHouseStock: parseInt(stockInForm.quantity) || 50,
+                  janAushadhiStock: 150,
+                  mrp: parseFloat(stockInForm.mrp) || 100,
+                  costPrice: parseFloat(stockInForm.costPrice) || 60,
+                  unit: stockInForm.unit
+                };
+                setInventoryList(prev => [newEntry, ...prev]);
+                setShowStockInModal(false);
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}
+            >
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                  Medicine Brand Name:
+                </label>
+                <input
+                  type="text"
+                  value={stockInForm.name}
+                  onChange={(e) => setStockInForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                  Active Salt / Generic Composition:
+                </label>
+                <input
+                  type="text"
+                  value={stockInForm.genericName}
+                  onChange={(e) => setStockInForm(f => ({ ...f, genericName: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                    Batch Number:
+                  </label>
+                  <input
+                    type="text"
+                    value={stockInForm.batchNo}
+                    onChange={(e) => setStockInForm(f => ({ ...f, batchNo: e.target.value }))}
+                    required
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                    Expiry Date (YYYY-MM):
+                  </label>
+                  <input
+                    type="text"
+                    value={stockInForm.expiryDate}
+                    onChange={(e) => setStockInForm(f => ({ ...f, expiryDate: e.target.value }))}
+                    required
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                    Quantity:
+                  </label>
+                  <input
+                    type="number"
+                    value={stockInForm.quantity}
+                    onChange={(e) => setStockInForm(f => ({ ...f, quantity: e.target.value }))}
+                    required
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                    MRP (₹):
+                  </label>
+                  <input
+                    type="number"
+                    value={stockInForm.mrp}
+                    onChange={(e) => setStockInForm(f => ({ ...f, mrp: e.target.value }))}
+                    required
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                    Cost (₹):
+                  </label>
+                  <input
+                    type="number"
+                    value={stockInForm.costPrice}
+                    onChange={(e) => setStockInForm(f => ({ ...f, costPrice: e.target.value }))}
+                    required
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  marginTop: '0.5rem',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.75rem',
+                  borderRadius: '10px',
+                  fontWeight: 900,
+                  cursor: 'pointer'
+                }}
+              >
+                Commit Batch to Micro-Inventory (ACID Ledger)
+              </button>
+            </form>
           </div>
         </div>
       )}
