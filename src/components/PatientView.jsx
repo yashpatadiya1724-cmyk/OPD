@@ -23,6 +23,7 @@ import {
   TrendingUp,
   Sparkles,
   Plane,
+  Bike,
   Scan,
   ShieldCheck
 } from 'lucide-react';
@@ -1578,10 +1579,10 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                     </span>
                   </div>
                   <h4 style={{ margin: '0.3rem 0 0.15rem', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
-                    Want Medicines Delivered? 10-Min Dark Store or 🚁 Drone
+                    Scheduled Home Delivery by Certified EV Rider Fleet
                   </h4>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
-                    ACID stock deduction across local chemists with 70.9% Jan Aushadhi generic savings.
+                    Select your convenient time slot or 15-min express delivery with 70.9% Jan Aushadhi generic savings &amp; secret doorstep OTP handoff.
                   </p>
                 </div>
 
@@ -1589,7 +1590,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setBlinkitInitialMode('drone');
+                      setBlinkitInitialMode('darkstore');
                       setShowBlinkitModal(true);
                     }}
                     style={{
@@ -1597,24 +1598,24 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                       color: '#ffffff',
                       border: 'none',
                       padding: '0.65rem 1.15rem',
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       fontWeight: 900,
                       fontSize: '0.85rem',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.4rem',
-                      boxShadow: '0 4px 12px rgba(5, 150, 105, 0.4)'
+                      boxShadow: '0 4px 16px rgba(5, 150, 105, 0.4)'
                     }}
                   >
-                    <Plane size={16} />
-                    <span>🚁 Cold-Chain Drone Drop</span>
+                    <Bike size={16} />
+                    <span>🛵 Schedule Home Delivery (Rider &amp; Slot)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setBlinkitInitialMode('darkstore');
+                      setBlinkitInitialMode('drone');
                       setShowBlinkitModal(true);
                     }}
                     style={{
@@ -1622,18 +1623,18 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                       color: '#ffffff',
                       border: 'none',
                       padding: '0.65rem 1.15rem',
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       fontWeight: 900,
                       fontSize: '0.85rem',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.4rem',
-                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
+                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
                     }}
                   >
-                    <Sparkles size={16} />
-                    <span>⚡ 10-Min Express Rider</span>
+                    <Plane size={16} />
+                    <span>🚁 Emergency Drone Drop</span>
                   </button>
                 </div>
               </div>

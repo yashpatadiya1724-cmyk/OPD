@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Scan,
   Plane,
+  Bike,
   FileText
 } from 'lucide-react';
 import { seedDemoData, subscribePendingDoctors, subscribeUserHistory } from '../firebase';
@@ -90,7 +91,7 @@ export default function AdminSidebar({
       items: [
         { id: 'ocr', label: 'Prescription OCR (AI)', icon: Scan, badge: 'AI VISION' },
         { id: 'abdm', label: 'ABDM & ABHA Locker', icon: ShieldCheck, badge: 'ABHA' },
-        { id: 'fulfillment', label: 'Blinkit Drone Dispatch', icon: Plane, badge: '⚡ 10m' },
+        { id: 'fulfillment', label: 'Scheduled Rider Delivery', icon: Bike, badge: 'HOME RIDER' },
       ]
     },
     {

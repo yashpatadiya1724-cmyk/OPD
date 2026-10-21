@@ -73,16 +73,20 @@ export default function PharmacyConsole() {
     unit: 'Strips (10 Tabs)'
   });
 
-  // Hyperlocal Dispatch Orders (Blinkit 10-min + Emergency Drone)
+  // Hyperlocal Scheduled Dispatch Orders (Scheduled Rider Fleet + Emergency Drone)
   const [dispatchOrders, setDispatchOrders] = useState([
     {
       id: 'disp-01',
       patientName: 'Ravi Kumar Patel',
       address: 'B-402, Shivalik Residency, Near Sola',
       medicines: ['Human Actrapid Insulin 40IU', 'Paracetamol 650mg'],
-      mode: 'drone',
-      status: 'IN_FLIGHT',
-      droneTelemetry: { altitude: '78m', speed: '46 km/h', temp: '4.2°C' },
+      mode: 'bike',
+      slot: '⚡ Express (15 Mins)',
+      riderName: 'Vikram Rathore (Ather 450X EV)',
+      riderPhone: '+91 98251 04921',
+      doorstepOtp: '7391',
+      status: 'ON_ROUTE',
+      bagTemp: '4.5°C Verified',
       etaMinutes: 6,
       totalAmount: 224,
       placedAt: '4 mins ago'
@@ -93,11 +97,31 @@ export default function PharmacyConsole() {
       address: 'Plot 18, Sun City, Drive-In Road',
       medicines: ['Pan 40', 'Cetzine 10mg'],
       mode: 'bike',
-      riderName: 'Suresh Patel (EV-04)',
+      slot: '🌅 Morning Slot (08:00 AM – 10:00 AM)',
+      riderName: 'Rahul M. Sharma (Ola S1 Pro)',
+      riderPhone: '+91 98791 22819',
+      doorstepOtp: '4820',
       status: 'PACKING',
+      bagTemp: '4.2°C Verified',
       etaMinutes: 9,
       totalAmount: 123,
       placedAt: '1 min ago'
+    },
+    {
+      id: 'disp-03',
+      patientName: 'Anil Deshmukh',
+      address: 'Flat 101, Galaxy Tower, SG Highway',
+      medicines: ['Augmentin 625mg', 'Dolo 650mg'],
+      mode: 'bike',
+      slot: '🌆 Evening Slot (05:00 PM – 07:00 PM)',
+      riderName: 'Amit K. Patel (TVS iQube)',
+      riderPhone: '+91 98980 44920',
+      doorstepOtp: '9152',
+      status: 'SCHEDULED',
+      bagTemp: '5.0°C Verified',
+      etaMinutes: 35,
+      totalAmount: 165,
+      placedAt: '10 mins ago'
     }
   ]);
 
@@ -487,8 +511,8 @@ export default function PharmacyConsole() {
             gap: '0.5rem'
           }}
         >
-          <Plane size={18} />
-          <span>Drone &amp; Blinkit Dispatch ({dispatchOrders.length})</span>
+          <Bike size={18} />
+          <span>Scheduled Rider &amp; Dispatch ({dispatchOrders.length})</span>
         </button>
       </div>
 
@@ -1319,7 +1343,7 @@ export default function PharmacyConsole() {
                   }}
                 >
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '1.1rem' }}>
                         {order.mode === 'drone' ? '🚁' : '🛵'}
                       </span>
@@ -1327,22 +1351,27 @@ export default function PharmacyConsole() {
                         {order.patientName} &bull; Order #{order.id}
                       </strong>
                       <span style={{
-                        background: order.status === 'IN_FLIGHT' ? '#dbeafe' : '#fef3c7',
-                        color: order.status === 'IN_FLIGHT' ? '#1d4ed8' : '#92400e',
+                        background: order.status === 'ON_ROUTE' ? '#dbeafe' : order.status === 'PACKING' ? '#fef3c7' : order.status === 'DELIVERED' ? '#dcfce7' : '#ede9fe',
+                        color: order.status === 'ON_ROUTE' ? '#1d4ed8' : order.status === 'PACKING' ? '#92400e' : order.status === 'DELIVERED' ? '#166534' : '#6b21a8',
                         fontSize: '0.72rem',
                         fontWeight: 900,
                         padding: '0.15rem 0.5rem',
                         borderRadius: '6px'
                       }}>
-                        {order.status === 'IN_FLIGHT' ? '🚁 DRONE IN AIR' : '📦 PHARMACIST PACKING'}
+                        {order.status === 'ON_ROUTE' ? '🛵 RIDER ON ROUTE' : order.status === 'PACKING' ? '📦 PHARMACIST PACKING' : order.status === 'DELIVERED' ? '✓ DELIVERED' : '⏰ SCHEDULED SLOT'}
                       </span>
+                      {order.slot && (
+                        <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#0369a1', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 800 }}>
+                          {order.slot}
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '4px' }}>
                       📍 {order.address} &bull; Placed: {order.placedAt}
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '6px', flexWrap: 'wrap' }}>
                       {order.medicines.map((m, idx) => (
                         <span key={idx} style={{ background: '#f1f5f9', color: '#334155', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.74rem', fontWeight: 700 }}>
                           💊 {m}
@@ -1350,11 +1379,9 @@ export default function PharmacyConsole() {
                       ))}
                     </div>
 
-                    {order.mode === 'drone' && order.droneTelemetry && (
-                      <div style={{ marginTop: '8px', fontSize: '0.76rem', color: '#0369a1', fontWeight: 800 }}>
-                        Telemetry: Altitude {order.droneTelemetry.altitude} &bull; Speed {order.droneTelemetry.speed} &bull; Cold-Chain Temp {order.droneTelemetry.temp} (Active Cooling)
-                      </div>
-                    )}
+                    <div style={{ marginTop: '6px', fontSize: '0.76rem', color: '#059669', fontWeight: 800 }}>
+                      🛵 Assigned Rider: <strong>{order.riderName}</strong> &bull; ❄️ Cold-Bag: {order.bagTemp || '4.5°C Verified'} &bull; 🔒 Doorstep OTP: <span style={{ background: '#0f172a', color: '#38bdf8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontFamily: 'monospace' }}>{order.doorstepOtp || '7391'}</span>
+                    </div>
                   </div>
 
                   <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -1371,7 +1398,7 @@ export default function PharmacyConsole() {
                     {order.status === 'PACKING' ? (
                       <button
                         onClick={() => {
-                          setDispatchOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'IN_FLIGHT' } : o));
+                          setDispatchOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'ON_ROUTE' } : o));
                           playChime();
                         }}
                         style={{
@@ -1385,9 +1412,9 @@ export default function PharmacyConsole() {
                           cursor: 'pointer'
                         }}
                       >
-                        ✓ Pack &amp; Handover to Rider
+                        ✓ Handover to Rider
                       </button>
-                    ) : (
+                    ) : order.status === 'ON_ROUTE' ? (
                       <button
                         onClick={() => {
                           setDispatchOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'DELIVERED', etaMinutes: 0 } : o));
@@ -1403,8 +1430,12 @@ export default function PharmacyConsole() {
                           cursor: 'pointer'
                         }}
                       >
-                        Mark Touchdown Delivered ✓
+                        Verify OTP &amp; Mark Delivered ✓
                       </button>
+                    ) : (
+                      <span style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 900, background: '#dcfce7', padding: '0.35rem 0.75rem', borderRadius: '8px' }}>
+                        ✓ Order Completed
+                      </span>
                     )}
                   </div>
                 </div>

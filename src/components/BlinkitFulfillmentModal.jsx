@@ -75,14 +75,16 @@ export default function BlinkitFulfillmentModal({
   isOpen, 
   onClose, 
   initialMedicines = ['Paracetamol 650mg', 'Amoxicillin 500mg', 'Pantoprazole 40mg'], 
-  initialMode = 'drone',
+  initialMode = 'darkstore',
   doctorName = 'Dr. Rajesh Mehta',
   patientName = 'Ravi Kumar Patel'
 }) {
   const [selectedPharmacy, setSelectedPharmacy] = useState(PARTNER_PHARMACIES[0]);
-  const [deliveryMode, setDeliveryMode] = useState(initialMode); // 'drone' | 'darkstore' | 'pickup'
+  const [deliveryMode, setDeliveryMode] = useState(initialMode); // 'darkstore' | 'drone' | 'pickup'
+  const [selectedSlot, setSelectedSlot] = useState('express'); // 'express' | 'morning' | 'midday' | 'evening'
   const [useGeneric, setUseGeneric] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState('B-402, Shivalik Residency, Near Sola Bridge, Ahmedabad');
+  const [doorstepOtp] = useState('7391');
   
   // Fulfillment State Machine: 'configuring' -> 'committing_acid' -> 'live_tracking' -> 'delivered'
   const [orderStage, setOrderStage] = useState('configuring');
@@ -268,7 +270,36 @@ export default function BlinkitFulfillmentModal({
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem' }}>
                   
-                  {/* Option A: Drone Delivery */}
+                  {/* Option A: Scheduled Dark Store Rider (RECOMMENDED) */}
+                  <div
+                    onClick={() => setDeliveryMode('darkstore')}
+                    style={{
+                      background: deliveryMode === 'darkstore' ? 'rgba(5, 150, 105, 0.25)' : '#1e293b',
+                      border: deliveryMode === 'darkstore' ? '2px solid #34d399' : '1px solid #334155',
+                      padding: '1.15rem',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <Bike size={24} color="#34d399" />
+                      <span style={{ fontSize: '0.7rem', background: '#059669', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                        RECOMMENDED &bull; SLOTS
+                      </span>
+                    </div>
+                    <div style={{ fontWeight: 900, fontSize: '1rem', color: '#ffffff' }}>
+                      🛵 Scheduled Rider Home Delivery
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                      Delivered by assigned EV rider on your preferred time slot with secret doorstep OTP handoff.
+                    </div>
+                    <div style={{ marginTop: '0.6rem', fontSize: '0.8rem', fontWeight: 800, color: '#34d399' }}>
+                      ETA: ~15 mins or pick slot &bull; ₹25 rider fee
+                    </div>
+                  </div>
+
+                  {/* Option B: Drone Delivery */}
                   <div
                     onClick={() => setDeliveryMode('drone')}
                     style={{
@@ -283,7 +314,7 @@ export default function BlinkitFulfillmentModal({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                       <Plane size={24} color="#38bdf8" />
                       <span style={{ fontSize: '0.7rem', background: '#0369a1', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
-                        POSTER ITEM 3
+                        EMERGENCY ONLY
                       </span>
                     </div>
                     <div style={{ fontWeight: 900, fontSize: '1rem', color: '#ffffff' }}>
@@ -294,35 +325,6 @@ export default function BlinkitFulfillmentModal({
                     </div>
                     <div style={{ marginTop: '0.6rem', fontSize: '0.8rem', fontWeight: 800, color: '#38bdf8' }}>
                       ETA: ~7 mins &bull; ₹49 aerial fee
-                    </div>
-                  </div>
-
-                  {/* Option B: 10-Minute Dark Store Bike */}
-                  <div
-                    onClick={() => setDeliveryMode('darkstore')}
-                    style={{
-                      background: deliveryMode === 'darkstore' ? 'rgba(5, 150, 105, 0.2)' : '#1e293b',
-                      border: deliveryMode === 'darkstore' ? '2px solid #34d399' : '1px solid #334155',
-                      padding: '1.15rem',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <Bike size={24} color="#34d399" />
-                      <span style={{ fontSize: '0.7rem', background: '#059669', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
-                        BLINKIT SPEED
-                      </span>
-                    </div>
-                    <div style={{ fontWeight: 900, fontSize: '1rem', color: '#ffffff' }}>
-                      ⚡ 10-Min Dark Store Rider
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                      Hyperlocal dark store dispatch via nearby partner chemist with instant packaging.
-                    </div>
-                    <div style={{ marginTop: '0.6rem', fontSize: '0.8rem', fontWeight: 800, color: '#34d399' }}>
-                      ETA: ~10 mins &bull; ₹25 rider fee
                     </div>
                   </div>
 
@@ -357,6 +359,49 @@ export default function BlinkitFulfillmentModal({
 
                 </div>
               </div>
+
+              {/* Time Slot Picker (When in Rider Mode) */}
+              {deliveryMode === 'darkstore' && (
+                <div style={{ background: '#1e293b', borderRadius: '12px', padding: '1rem 1.25rem', border: '1px solid #334155' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#34d399', textTransform: 'uppercase' }}>
+                      ⏰ Choose Home Delivery Time Slot
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                      Guaranteed on-time drop
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem' }}>
+                    {[
+                      { id: 'express', label: '⚡ Express', time: '15–20 Mins' },
+                      { id: 'morning', label: '🌅 Morning', time: '8:00–10:00 AM' },
+                      { id: 'midday', label: '☀️ Midday', time: '12:00–2:00 PM' },
+                      { id: 'evening', label: '🌆 Evening', time: '5:00–7:00 PM' }
+                    ].map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSelectedSlot(s.id)}
+                        style={{
+                          padding: '0.55rem',
+                          borderRadius: '8px',
+                          border: selectedSlot === s.id ? '2px solid #34d399' : '1px solid #475569',
+                          background: selectedSlot === s.id ? 'rgba(5, 150, 105, 0.25)' : '#0f172a',
+                          color: selectedSlot === s.id ? '#34d399' : '#cbd5e1',
+                          fontSize: '0.76rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <div>{s.label}</div>
+                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>{s.time}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Generic Jan Aushadhi Switch */}
               <div style={{
@@ -692,18 +737,63 @@ export default function BlinkitFulfillmentModal({
 
               {/* RIDER MODE HUD */}
               {deliveryMode !== 'drone' && (
-                <div style={{ background: '#1e293b', padding: '1.25rem', borderRadius: '12px', border: '1px solid #334155' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                      <Bike size={22} />
-                    </div>
+                <div style={{ background: '#1e293b', padding: '1.25rem', borderRadius: '14px', border: '2px solid #059669', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  
+                  {/* Secret Doorstep OTP Banner */}
+                  <div style={{ background: '#0f172a', borderRadius: '10px', padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', border: '1px solid #334155' }}>
                     <div>
-                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>Rider Suresh Patel Dispatched</strong>
-                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                        Electric Two-Wheeler &bull; Insulated Medical Carrier &bull; Direct route to {deliveryAddress}
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>
+                        SECRET DOORSTEP DELIVERY OTP
+                      </div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#38bdf8', letterSpacing: '0.15em', fontFamily: 'monospace' }}>
+                        {doorstepOtp}
                       </div>
                     </div>
+                    <span style={{ fontSize: '0.72rem', color: '#a7f3d0', maxWidth: '280px', lineHeight: 1.4 }}>
+                      🔒 Give this 4-digit code to the rider at your door to verify tamper-proof seal.
+                    </span>
                   </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.3rem' }}>
+                        🛵
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <strong style={{ fontSize: '0.98rem', color: '#ffffff' }}>Rider Vikram Rathore</strong>
+                          <span style={{ fontSize: '0.68rem', background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>
+                            ⭐ 4.96 (2,840+ runs)
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '2px' }}>
+                          Ather 450X EV (GJ-01-ET-9182) &bull; ❄️ Cold-Bag: 4.5°C &bull; En-route to {deliveryAddress}
+                        </div>
+                      </div>
+                    </div>
+
+                    <a
+                      href="tel:+919825104921"
+                      style={{
+                        padding: '0.5rem 0.95rem',
+                        background: '#0284c7',
+                        color: '#ffffff',
+                        borderRadius: '8px',
+                        textDecoration: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.78rem'
+                      }}
+                    >
+                      📞 Call Rider
+                    </a>
+                  </div>
+
+                  {/* Route Progress */}
+                  <div style={{ background: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.74rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>📍 Landmark: Sola Bridge Crossing (1.1 km away)</span>
+                    <span style={{ color: '#34d399', fontWeight: 800 }}>● Speed: 34 km/h (EV)</span>
+                  </div>
+
                 </div>
               )}
 

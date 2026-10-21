@@ -16,6 +16,7 @@ import SuperAdminPanel from './components/SuperAdminPanel';
 import ProjectShowcase from './components/ProjectShowcase';
 import PrescriptionOCRView from './components/PrescriptionOCRView';
 import ABDMHealthLockerView from './components/ABDMHealthLockerView';
+import ScheduledRiderDeliveryView from './components/ScheduledRiderDeliveryView';
 import BlinkitFulfillmentModal from './components/BlinkitFulfillmentModal';
 import AuthModal from './components/AuthModal';
 import LoginPage from './components/LoginPage';
@@ -63,7 +64,7 @@ function AppContent() {
       super_admin: 'Platform Super Admin & Settlement Ledger | MediQ',
       ocr: 'Handwritten Prescription OCR & AI Vision | MediQ',
       abdm: 'Ayushman Bharat ABHA Card & Health Locker | MediQ',
-      fulfillment: 'Blinkit Dark-Store & Drone Dispatch | MediQ'
+      fulfillment: 'Scheduled Rider Medicine Delivery & EV Fleet | MediQ'
     };
     if (typeof document !== 'undefined') {
       document.title = titles[currentRole] || 'MediQ – Smart OPD Queue & Pharmacy Fulfilment System';
@@ -277,48 +278,9 @@ function AppContent() {
           <ABDMHealthLockerView />
         )}
 
-        {/* VIEW 14: BLINKIT MICRO-FULFILLMENT & DRONE DISPATCH (POSTER ITEM 3) */}
+        {/* VIEW 14: SCHEDULED RIDER DELIVERY & FLEET TRACKER */}
         {currentRole === 'fulfillment' && (
-          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem' }}>
-            <div className="glass-card" style={{ padding: '2.5rem 2rem', textAlign: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1.25rem',
-                boxShadow: '0 8px 24px rgba(5, 150, 105, 0.35)'
-              }}>
-                <span style={{ fontSize: '2rem' }}>🚁</span>
-              </div>
-              <h2 style={{ fontSize: '1.75rem', fontWeight: 900, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                Blinkit Dark-Store &amp; Autonomous Drone Dispatch Hub
-              </h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', maxWidth: '640px', margin: '0 auto 1.5rem', fontSize: '0.92rem', lineHeight: 1.5 }}>
-                Instant hyper-local delivery for prescription orders in 10 minutes or emergency cold-chain aerial drop for insulin and vaccines with ACID stock deductions.
-              </p>
-              <button
-                onClick={() => setShowDirectFulfillmentModal(true)}
-                style={{
-                  background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '0.85rem 1.75rem',
-                  borderRadius: '12px',
-                  fontWeight: 900,
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(5, 150, 105, 0.4)'
-                }}
-              >
-                Launch Live Drone &amp; Dark-Store Dispatch Tracker
-              </button>
-            </div>
-          </div>
+          <ScheduledRiderDeliveryView onBackToDirectory={() => setCurrentRole('hospitals')} />
         )}
       </main>
 
