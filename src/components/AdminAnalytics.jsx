@@ -72,13 +72,13 @@ export default function AdminAnalytics() {
       id: 'sms-04',
       recipientPhone: '+91 99099 88776',
       patientName: 'Riya Sharma',
-      tokenCode: 'DRONE-01',
-      type: 'DRONE_COLD_CHAIN_DISPATCH',
-      message: '🚁 MediQ Aero Dispatch: Cold-chain Drone Aero-1 launched from Jan Aushadhi Dark Store. ETA: 7 mins. Live flight tracker: https://mediq.app/t/DRN-841',
+      tokenCode: 'RIDER-01',
+      type: 'RIDER_COLD_CHAIN_DISPATCH',
+      message: '🛵 MediQ Express Rider: EV Rider Vikram Sharma en route with temperature-controlled medicine pack. ETA: 12 mins. Doorstep OTP: 7391. Live tracker: https://mediq.app/t/RDR-841',
       status: 'DELIVERED',
       deliveredAt: '38 mins ago',
       latency: '1.4s',
-      dltTag: 'DLT-DRONE-TELEMETRY-04'
+      dltTag: 'DLT-RIDER-TELEMETRY-04'
     }
   ]);
 

@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'prescription_builder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -781,14 +782,123 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                 'floorWing': _wingController.text.trim(),
                 'locationUpdatedAt': FieldValue.serverTimestamp(),
               });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✓ Room updated! Patients notified in real time.')),
-              );
+              if (mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✓ Room updated! Patients notified in real time.')),
+                );
+              }
             },
             child: const Text('Update & Notify Patients'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDelayBroadcastDialog(Map<String, dynamic> docData) {
+    int selectedMinutes = docData['expectedDelayMinutes'] ?? 30;
+    if (selectedMinutes <= 0) selectedMinutes = 30;
+    String selectedReason = docData['pauseReason'] ?? 'Emergency surgery / OT call';
+    final reasons = [
+      'Emergency surgery / OT call',
+      'Clinical ward rounds & ICU emergency',
+      'Doctor in transit / traffic delay',
+      'Consultation break / Clinical meeting',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Broadcast Delay / Pause Queue',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Expected Delay Duration:',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [15, 30, 45, 60].map((mins) {
+                    final isSel = selectedMinutes == mins;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: OutlinedButton(
+                          onPressed: () => setDlgState(() => selectedMinutes = mins),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: isSel ? const Color(0xFFD97706) : Colors.transparent,
+                            foregroundColor: isSel ? Colors.white : const Color(0xFF334155),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          child: Text('$mins m', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Select Clinical Reason:',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                ...reasons.map((r) {
+                  return RadioListTile<String>(
+                    dense: true,
+                    title: Text(r, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    value: r,
+                    groupValue: selectedReason,
+                    activeColor: const Color(0xFFD97706),
+                    onChanged: (val) => setDlgState(() => selectedReason = val ?? r),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await FirebaseFirestore.instance.collection('doctors').doc(widget.doctorId).update({
+                  'queuePaused': true,
+                  'pauseReason': selectedReason,
+                  'expectedDelayMinutes': selectedMinutes,
+                  'pauseStartedAt': FieldValue.serverTimestamp(),
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('⚠️ Delay broadcasted: ~$selectedMinutes mins delay sent to all waiting patients.')),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Broadcast Delay & Pause', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1068,6 +1178,30 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                     'completedAt': FieldValue.serverTimestamp(),
                   });
 
+                  // Also save to prescriptions/ collection for v5 pharmacy matching
+                  if (medList.isNotEmpty) {
+                    await FirebaseFirestore.instance.collection('prescriptions').add({
+                      'doctorId': widget.doctorId,
+                      'doctorName': docData['name'] ?? 'Doctor',
+                      'hospitalId': docData['hospitalId'] ?? 'citycare-central',
+                      'hospitalName': docData['hospitalName'] ?? 'Hospital',
+                      'patientId': token['patientId'] ?? token['phoneNumber'] ?? 'unknown',
+                      'patientName': token['patientName'] ?? 'Patient',
+                      'diagnosis': '',
+                      'items': medList.map((m) => {
+                        'drugName': m,
+                        'salt': '',
+                        'strength': '',
+                        'form': 'tab',
+                        'dosage': '1 BD',
+                        'duration': '5 days',
+                        'quantity': 10,
+                      }).toList(),
+                      'status': 'active',
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+                  }
+
                   _stopTimer();
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1174,31 +1308,97 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.meeting_room, color: Color(0xFF0D9488), size: 18),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          roomNum,
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF090D16)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(floorWing, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
                                 Row(
                                   children: [
-                                    const Icon(Icons.meeting_room, color: Color(0xFF0D9488), size: 18),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _showRoomChangeDialog(docData),
+                                      icon: const Icon(Icons.edit_location_alt, size: 14),
+                                      label: const Text('Room', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+                                    ),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      roomNum,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF090D16)),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _showDelayBroadcastDialog(docData),
+                                      icon: const Icon(Icons.pause_circle_outline, size: 14, color: Color(0xFFD97706)),
+                                      label: const Text('Delay', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, color: Color(0xFFD97706))),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(floorWing, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
                               ],
                             ),
-                            OutlinedButton.icon(
-                              onPressed: () => _showRoomChangeDialog(docData),
-                              icon: const Icon(Icons.edit_location_alt, size: 15),
-                              label: const Text('Change Room', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                            ),
+                            if (docData['queuePaused'] == true) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFFDE68A)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.pause_circle_filled, color: Color(0xFFD97706), size: 24),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'QUEUE PAUSED • DELAY BROADCAST ACTIVE',
+                                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFFB45309)),
+                                          ),
+                                          Text(
+                                            '${docData['pauseReason'] ?? 'Emergency surgery'} (~${docData['expectedDelayMinutes'] ?? 30}m)',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        await FirebaseFirestore.instance.collection('doctors').doc(widget.doctorId).update({
+                                          'queuePaused': false,
+                                          'pauseReason': null,
+                                          'expectedDelayMinutes': 0,
+                                        });
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('✓ Queue Resumed! Patients notified.')),
+                                          );
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF16A34A),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      ),
+                                      child: const Text('Resume', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1218,6 +1418,19 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
 
                         final inProgressToken = tokens.firstWhere((t) => t['status'] == 'in-progress', orElse: () => {});
                         final waitingTokens = tokens.where((t) => t['status'] == 'waiting').toList();
+                        final skippedOrNoShowTokens = tokens.where((t) => t['status'] == 'no-show' || (t['skipCount'] != null && (t['skipCount'] as int) > 0)).toList();
+
+                        // Priority sorting (Emergency first, then priority scores)
+                        waitingTokens.sort((a, b) {
+                          final aLane = a['lane'] ?? 'normal';
+                          final bLane = b['lane'] ?? 'normal';
+                          if (aLane == 'emergency' && bLane != 'emergency') return -1;
+                          if (bLane == 'emergency' && aLane != 'emergency') return 1;
+                          final aScore = (a['priorityScore'] as num?)?.toInt() ?? 0;
+                          final bScore = (b['priorityScore'] as num?)?.toInt() ?? 0;
+                          if (bScore != aScore) return bScore - aScore;
+                          return ((a['tokenNumber'] as num?)?.toInt() ?? 0) - ((b['tokenNumber'] as num?)?.toInt() ?? 0);
+                        });
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1225,6 +1438,8 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                             if (inProgressToken.isNotEmpty) ...[
                               Builder(builder: (ctx) {
                                 _startTimer(inProgressToken['id']);
+                                final skipCount = (inProgressToken['skipCount'] as num?)?.toInt() ?? 0;
+                                final tokenCode = inProgressToken['tokenCode'] ?? 'Token #${inProgressToken['tokenNumber']}';
                                 return Card(
                                   color: const Color(0xFFF0FDF4),
                                   shape: RoundedRectangleBorder(
@@ -1234,17 +1449,26 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                                   child: Padding(
                                     padding: const EdgeInsets.all(16),
                                     child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              'NOW SERVING: TOKEN #${inProgressToken['tokenNumber']}',
+                                              'NOW SERVING: $tokenCode',
                                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF16A34A)),
                                             ),
-                                            Text(
-                                              _formatTimer(_elapsedSeconds),
-                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), fontFamily: 'monospace'),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFFBBF7D0)),
+                                              ),
+                                              child: Text(
+                                                _formatTimer(_elapsedSeconds),
+                                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), fontFamily: 'monospace'),
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1253,17 +1477,102 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                                           'Patient: ${inProgressToken['patientName']} (${inProgressToken['phoneNumber']})',
                                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                                         ),
-                                        const SizedBox(height: 12),
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: ElevatedButton(
-                                            onPressed: () => _showCompleteConsultationDialog(inProgressToken, docData),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF16A34A),
-                                              foregroundColor: Colors.white,
-                                            ),
-                                            child: const Text('Mark Consultation Complete (Prescribe & Handoff)', style: TextStyle(fontWeight: FontWeight.w900)),
+                                        if (inProgressToken['reason'] != null && inProgressToken['reason'].toString().isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Reason: ${inProgressToken['reason']}',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
                                           ),
+                                        ],
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: ElevatedButton(
+                                                onPressed: () => _showCompleteConsultationDialog(inProgressToken, docData),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF16A34A),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                ),
+                                                child: const Text('Quick Rx', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              flex: 3,
+                                              child: ElevatedButton.icon(
+                                                icon: const Icon(Icons.description, size: 16),
+                                                label: const Text('Detailed Rx', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                                onPressed: () {
+                                                  Navigator.of(context).push(MaterialPageRoute(
+                                                    builder: (_) => PrescriptionBuilder(
+                                                      doctorId: widget.doctorId,
+                                                      doctorName: docData['name'] ?? 'Doctor',
+                                                      hospitalId: docData['hospitalId'] ?? 'citycare-central',
+                                                      hospitalName: docData['hospitalName'] ?? 'Hospital',
+                                                      patientId: inProgressToken['patientId'] ?? inProgressToken['phoneNumber'] ?? 'unknown',
+                                                      patientName: inProgressToken['patientName'] ?? 'Patient',
+                                                      diagnosis: inProgressToken['reason'],
+                                                    ),
+                                                  ));
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF059669),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              flex: 2,
+                                              child: OutlinedButton(
+                                                onPressed: () async {
+                                                  final tokenId = inProgressToken['id'];
+                                                  if (skipCount >= 1) {
+                                                    // 2nd Miss: mark No-Show
+                                                    await FirebaseFirestore.instance.collection('doctors').doc(widget.doctorId).collection('tokens').doc(tokenId).update({
+                                                      'status': 'no-show',
+                                                      'skipCount': skipCount + 1,
+                                                      'secondMissNoShow': true,
+                                                      'noShowAt': FieldValue.serverTimestamp(),
+                                                      'noShowReason': 'Patient not present after 3-minute window (2nd Miss)',
+                                                    });
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(content: Text('⚠️ Patient marked as NO-SHOW (2nd Miss).')),
+                                                      );
+                                                    }
+                                                  } else {
+                                                    // 1st Miss: Move 3 positions back
+                                                    await FirebaseFirestore.instance.collection('doctors').doc(widget.doctorId).collection('tokens').doc(tokenId).update({
+                                                      'status': 'waiting',
+                                                      'skipCount': 1,
+                                                      'laneWeight': (inProgressToken['laneWeight'] ?? 0) - 15,
+                                                      'skippedAt': FieldValue.serverTimestamp(),
+                                                      'skipReason': 'Patient not present (moved 3 spots back)',
+                                                    });
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(content: Text('⚠️ Patient skipped & moved 3 positions back.')),
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: const Color(0xFFE11D48),
+                                                  side: const BorderSide(color: Color(0xFFFDA4AF)),
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                ),
+                                                child: Text(
+                                                  skipCount >= 1 ? 'Mark No-Show' : 'Skip (3 Back)',
+                                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -1293,15 +1602,48 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                               ),
 
                             ...waitingTokens.map((w) {
+                              final lane = w['lane'] ?? 'normal';
+                              final isEmergency = lane == 'emergency';
+                              final isPriority = ['senior', 'pregnant', 'disabled'].contains(lane);
+                              final tokenDisplay = w['tokenCode'] ?? '#${w['tokenNumber']}';
+
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ListTile(
                                   leading: CircleAvatar(
-                                    backgroundColor: const Color(0xFFEFF6FF),
-                                    child: Text('#${w['tokenNumber']}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0284C7))),
+                                    backgroundColor: isEmergency
+                                        ? const Color(0xFFFFE4E6)
+                                        : (isPriority ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF)),
+                                    child: Text(
+                                      '#${w['tokenNumber']}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: isEmergency
+                                            ? const Color(0xFFE11D48)
+                                            : (isPriority ? const Color(0xFFD97706) : const Color(0xFF0284C7)),
+                                      ),
+                                    ),
                                   ),
-                                  title: Text(w['patientName'] ?? 'Patient', style: const TextStyle(fontWeight: FontWeight.w800)),
-                                  subtitle: Text(w['reason'] ?? 'Routine consultation'),
+                                  title: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(w['patientName'] ?? 'Patient', style: const TextStyle(fontWeight: FontWeight.w800)),
+                                      ),
+                                      if (isEmergency)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(color: const Color(0xFFFFE4E6), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('🚨 EMERGENCY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFFE11D48))),
+                                        )
+                                      else if (isPriority)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('🧓 PRIORITY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                                        ),
+                                    ],
+                                  ),
+                                  subtitle: Text('${w['reason'] ?? 'Routine consultation'} • $tokenDisplay'),
                                   trailing: ElevatedButton(
                                     onPressed: () async {
                                       await FirebaseFirestore.instance
@@ -1320,6 +1662,51 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                                 ),
                               );
                             }),
+
+                            if (skippedOrNoShowTokens.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Theme(
+                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                child: ExpansionTile(
+                                  initiallyExpanded: false,
+                                  title: Text(
+                                    'Skipped & No-Show Patients (${skippedOrNoShowTokens.length})',
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF64748B)),
+                                  ),
+                                  children: skippedOrNoShowTokens.map((s) {
+                                    final isNoShow = s['status'] == 'no-show';
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      color: const Color(0xFFF8FAFC),
+                                      child: ListTile(
+                                        title: Text(s['patientName'] ?? 'Patient', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                                        subtitle: Text(
+                                          isNoShow ? 'Marked No-Show (Missed 2 calls)' : 'Skipped once (Moved 3 back)',
+                                          style: TextStyle(fontSize: 11, color: isNoShow ? const Color(0xFFDC2626) : const Color(0xFFD97706)),
+                                        ),
+                                        trailing: TextButton.icon(
+                                          onPressed: () async {
+                                            await FirebaseFirestore.instance
+                                                .collection('doctors')
+                                                .doc(widget.doctorId)
+                                                .collection('tokens')
+                                                .doc(s['id'])
+                                                .update({'status': 'waiting', 'skipCount': 0, 'recalledAt': FieldValue.serverTimestamp()});
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('✓ Patient recalled back to active waiting queue!')),
+                                              );
+                                            }
+                                          },
+                                          icon: const Icon(Icons.refresh, size: 14),
+                                          label: const Text('Recall', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
                           ],
                         );
                       },

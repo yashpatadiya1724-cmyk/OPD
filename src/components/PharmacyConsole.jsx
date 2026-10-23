@@ -73,7 +73,7 @@ export default function PharmacyConsole() {
     unit: 'Strips (10 Tabs)'
   });
 
-  // Hyperlocal Scheduled Dispatch Orders (Scheduled Rider Fleet + Emergency Drone)
+  // Hyperlocal Scheduled Dispatch Orders (Scheduled EV Rider Fleet Station)
   const [dispatchOrders, setDispatchOrders] = useState([
     {
       id: 'disp-01',
@@ -1301,7 +1301,7 @@ export default function PharmacyConsole() {
         </div>
       )}
 
-      {/* TAB 5: Drone & Blinkit Dispatch Station (PRD v5 Module B / Poster Item 3) */}
+      {/* TAB 5: Scheduled Rider & EV Fleet Dispatch Station (PRD v5 Module B / Poster Item 3) */}
       {activeTab === 'dispatch' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
@@ -1309,14 +1309,14 @@ export default function PharmacyConsole() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                  <Plane size={22} />
+                  <Bike size={22} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
-                    Hyperlocal Dark-Store &amp; Drone Dispatch Station
+                    Hyperlocal Dark-Store &amp; Scheduled EV Rider Station
                   </h3>
                   <p style={{ margin: '0.15rem 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
-                    Live management of outgoing 10-minute bike deliveries and temperature-controlled drone flights.
+                    Live management of outgoing 15-minute EV bike deliveries and temperature-controlled cold-chain rider dispatches.
                   </p>
                 </div>
               </div>
@@ -1332,7 +1332,7 @@ export default function PharmacyConsole() {
                   key={order.id}
                   style={{
                     background: '#ffffff',
-                    border: order.mode === 'drone' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                    border: order.status === 'ON_ROUTE' ? '2px solid #059669' : '1px solid #cbd5e1',
                     borderRadius: '12px',
                     padding: '1.25rem',
                     display: 'flex',
@@ -1345,7 +1345,7 @@ export default function PharmacyConsole() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '1.1rem' }}>
-                        {order.mode === 'drone' ? '🚁' : '🛵'}
+                        🛵
                       </span>
                       <strong style={{ fontSize: '1rem', color: '#0f172a' }}>
                         {order.patientName} &bull; Order #{order.id}

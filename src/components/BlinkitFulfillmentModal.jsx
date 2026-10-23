@@ -30,7 +30,7 @@ const PARTNER_PHARMACIES = [
     rating: 4.9,
     savingsBadge: '70.9% CHEAPER (JAN AUSHADHI)',
     address: 'Shop 12, Jan Kalyan Complex, Ring Road',
-    isDroneEnabled: true,
+    isRiderEnabled: true,
     inStock: true
   },
   {
@@ -42,7 +42,7 @@ const PARTNER_PHARMACIES = [
     rating: 4.8,
     savingsBadge: 'FASTEST (ON-SITE DISPENSE)',
     address: 'Ground Floor, CityCare Atrium',
-    isDroneEnabled: true,
+    isRiderEnabled: true,
     inStock: true
   },
   {
@@ -54,7 +54,7 @@ const PARTNER_PHARMACIES = [
     rating: 4.7,
     savingsBadge: '24x7 ALL-NIGHT DISPATCH',
     address: 'Opp. Silver Oak University Gate 2',
-    isDroneEnabled: true,
+    isRiderEnabled: true,
     inStock: true
   },
   {
@@ -66,7 +66,7 @@ const PARTNER_PHARMACIES = [
     rating: 4.6,
     savingsBadge: 'VERIFIED STOCK BATCH',
     address: 'Near S.G. Highway Crossing',
-    isDroneEnabled: false,
+    isRiderEnabled: true,
     inStock: true
   }
 ];
@@ -80,7 +80,7 @@ export default function BlinkitFulfillmentModal({
   patientName = 'Ravi Kumar Patel'
 }) {
   const [selectedPharmacy, setSelectedPharmacy] = useState(PARTNER_PHARMACIES[0]);
-  const [deliveryMode, setDeliveryMode] = useState(initialMode); // 'darkstore' | 'drone' | 'pickup'
+  const [deliveryMode, setDeliveryMode] = useState(initialMode === 'drone' || !initialMode ? 'express_rider' : initialMode); // 'express_rider' | 'scheduled_rider' | 'darkstore' | 'pickup'
   const [selectedSlot, setSelectedSlot] = useState('express'); // 'express' | 'morning' | 'midday' | 'evening'
   const [useGeneric, setUseGeneric] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState('B-402, Shivalik Residency, Near Sola Bridge, Ahmedabad');
@@ -91,15 +91,17 @@ export default function BlinkitFulfillmentModal({
   const [acidTxnHash, setAcidTxnHash] = useState('');
   const [flightTimeSeconds, setFlightTimeSeconds] = useState(0);
 
-  // Drone telemetry live simulation state
-  const [droneTelemetry, setDroneTelemetry] = useState({
-    altitude: 78, // meters
-    speed: 46, // km/h
-    temperature: 4.2, // celsius for cold-chain insulin/vaccines
-    battery: 92, // %
+  // EV Rider telemetry live simulation state
+  const [riderTelemetry, setRiderTelemetry] = useState({
+    riderName: 'Vikram Rathore',
+    vehicle: 'Ather 450X EV (GJ-01-ET-9182)',
+    speed: 34, // km/h
+    temperature: 4.4, // celsius for cold-chain insulin/vaccines
+    battery: 88, // % EV battery
     gpsLat: '23.0782° N',
     gpsLng: '72.5294° E',
-    etaRemainingMins: 7
+    distanceKm: 1.1,
+    etaRemainingMins: 8
   });
 
   // Calculate pricing
@@ -107,7 +109,7 @@ export default function BlinkitFulfillmentModal({
   const baseBrandPrice = medicineCount * 85;
   const genericPrice = medicineCount * 25;
   const activeSubtotal = useGeneric ? genericPrice : baseBrandPrice;
-  const deliveryFee = deliveryMode === 'pickup' ? 0 : deliveryMode === 'drone' ? 49 : 25;
+  const deliveryFee = deliveryMode === 'pickup' ? 0 : deliveryMode === 'scheduled_rider' ? 15 : 25;
   const totalAmount = activeSubtotal + deliveryFee;
 
   // Handle ACID Order Placement
@@ -122,22 +124,22 @@ export default function BlinkitFulfillmentModal({
     }, 1200);
   };
 
-  // Live flight / tracking interval simulation
+  // Live rider tracking interval simulation
   useEffect(() => {
     let timer;
     if (orderStage === 'live_tracking') {
       timer = setInterval(() => {
         setFlightTimeSeconds(prev => {
           const next = prev + 1;
-          // Update simulated telemetry
-          setDroneTelemetry(t => ({
-            altitude: Math.max(0, Math.round(75 + Math.sin(next) * 5)),
-            speed: Math.round(44 + Math.cos(next) * 4),
-            temperature: +(4.2 + (Math.sin(next) * 0.1)).toFixed(1),
-            battery: Math.max(10, 92 - Math.floor(next / 10)),
+          setRiderTelemetry(t => ({
+            ...t,
+            speed: Math.round(32 + Math.cos(next) * 5),
+            temperature: +(4.4 + (Math.sin(next) * 0.1)).toFixed(1),
+            battery: Math.max(20, 88 - Math.floor(next / 15)),
             gpsLat: `23.${(782 + next * 2).toString().padStart(4, '0')}° N`,
             gpsLng: `72.${(5294 + next).toString().padStart(4, '0')}° E`,
-            etaRemainingMins: Math.max(1, 7 - Math.floor(next / 15))
+            distanceKm: Math.max(0.1, +(1.1 - next * 0.04).toFixed(1)),
+            etaRemainingMins: Math.max(1, 8 - Math.floor(next / 12))
           }));
           return next;
         });
@@ -213,7 +215,7 @@ export default function BlinkitFulfillmentModal({
                 </span>
               </div>
               <h3 style={{ margin: '0.15rem 0 0', fontSize: '1.3rem', fontWeight: 900, color: '#ffffff' }}>
-                Instant Pharmacy Fulfillment &amp; Drone Dispatch
+                Instant Pharmacy Fulfillment &amp; Scheduled EV Rider Dispatch
               </h3>
             </div>
           </div>
@@ -272,10 +274,10 @@ export default function BlinkitFulfillmentModal({
                   
                   {/* Option A: Scheduled Dark Store Rider (RECOMMENDED) */}
                   <div
-                    onClick={() => setDeliveryMode('darkstore')}
+                    onClick={() => setDeliveryMode('scheduled_rider')}
                     style={{
-                      background: deliveryMode === 'darkstore' ? 'rgba(5, 150, 105, 0.25)' : '#1e293b',
-                      border: deliveryMode === 'darkstore' ? '2px solid #34d399' : '1px solid #334155',
+                      background: (deliveryMode === 'scheduled_rider' || deliveryMode === 'darkstore') ? 'rgba(5, 150, 105, 0.25)' : '#1e293b',
+                      border: (deliveryMode === 'scheduled_rider' || deliveryMode === 'darkstore') ? '2px solid #34d399' : '1px solid #334155',
                       padding: '1.15rem',
                       borderRadius: '12px',
                       cursor: 'pointer',
@@ -295,16 +297,16 @@ export default function BlinkitFulfillmentModal({
                       Delivered by assigned EV rider on your preferred time slot with secret doorstep OTP handoff.
                     </div>
                     <div style={{ marginTop: '0.6rem', fontSize: '0.8rem', fontWeight: 800, color: '#34d399' }}>
-                      ETA: ~15 mins or pick slot &bull; ₹25 rider fee
+                      ETA: Choose your slot &bull; ₹15 rider fee
                     </div>
                   </div>
 
-                  {/* Option B: Drone Delivery */}
+                  {/* Option B: Express 15-Min EV Rider */}
                   <div
-                    onClick={() => setDeliveryMode('drone')}
+                    onClick={() => setDeliveryMode('express_rider')}
                     style={{
-                      background: deliveryMode === 'drone' ? 'rgba(2, 132, 199, 0.2)' : '#1e293b',
-                      border: deliveryMode === 'drone' ? '2px solid #38bdf8' : '1px solid #334155',
+                      background: deliveryMode === 'express_rider' ? 'rgba(2, 132, 199, 0.2)' : '#1e293b',
+                      border: deliveryMode === 'express_rider' ? '2px solid #38bdf8' : '1px solid #334155',
                       padding: '1.15rem',
                       borderRadius: '12px',
                       cursor: 'pointer',
@@ -312,19 +314,19 @@ export default function BlinkitFulfillmentModal({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <Plane size={24} color="#38bdf8" />
-                      <span style={{ fontSize: '0.7rem', background: '#0369a1', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
-                        EMERGENCY ONLY
+                      <Zap size={24} color="#38bdf8" />
+                      <span style={{ fontSize: '0.7rem', background: '#0284c7', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                        ⚡ 15-MIN EXPRESS
                       </span>
                     </div>
                     <div style={{ fontWeight: 900, fontSize: '1rem', color: '#ffffff' }}>
-                      🚁 Cold-Chain Drone Drop
+                      ⚡ Instant Express EV Rider
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                      Fastest aerial dispatch for emergency insulin &amp; temperature-monitored vaccines (2–8°C).
+                      Immediate dispatch from nearest dark-store with insulated cold-bag (2–8°C for Insulin).
                     </div>
                     <div style={{ marginTop: '0.6rem', fontSize: '0.8rem', fontWeight: 800, color: '#38bdf8' }}>
-                      ETA: ~7 mins &bull; ₹49 aerial fee
+                      ETA: ~12–15 mins &bull; ₹25 express fee
                     </div>
                   </div>
 
@@ -591,7 +593,7 @@ export default function BlinkitFulfillmentModal({
             </div>
           )}
 
-          {/* STEP 3: LIVE TRACKING & DRONE TELEMETRY HUD */}
+          {/* STEP 3: LIVE TRACKING & EV RIDER TELEMETRY HUD */}
           {orderStage === 'live_tracking' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               
@@ -620,7 +622,7 @@ export default function BlinkitFulfillmentModal({
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '0.75rem', color: '#a7f3d0', fontWeight: 800 }}>ESTIMATED ARRIVAL</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffffff' }}>
-                    {droneTelemetry.etaRemainingMins} Minutes
+                    {riderTelemetry.etaRemainingMins} Minutes
                   </div>
                 </div>
               </div>
@@ -643,118 +645,82 @@ export default function BlinkitFulfillmentModal({
 
                   <div style={{ opacity: 1 }}>
                     <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem', fontSize: '0.8rem', fontWeight: 900 }}>
-                      {deliveryMode === 'drone' ? '🚁' : '⚡'}
+                      ⚡
                     </div>
                     <div style={{ fontSize: '0.78rem', fontWeight: 900, color: '#38bdf8' }}>
-                      {deliveryMode === 'drone' ? 'Drone In Flight' : 'Rider En-Route'}
+                      Rider En-Route
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#38bdf8' }}>Active Corridor</div>
+                    <div style={{ fontSize: '0.7rem', color: '#38bdf8' }}>Active Route</div>
                   </div>
 
                   <div style={{ opacity: 0.5 }}>
                     <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem', fontSize: '0.8rem', fontWeight: 900 }}>4</div>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8' }}>Safe Touchdown</div>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8' }}>Safe Doorstep</div>
                     <div style={{ fontSize: '0.7rem', color: '#64748b' }}>OTP Handoff</div>
                   </div>
 
                 </div>
               </div>
 
-              {/* DRONE FLIGHT TELEMETRY HUD (WHEN IN DRONE MODE) */}
-              {deliveryMode === 'drone' && (
-                <div style={{
-                  background: 'linear-gradient(135deg, #090d16 0%, #0f172a 100%)',
-                  borderRadius: '14px',
-                  border: '2px solid #0284c7',
-                  padding: '1.5rem',
-                  boxShadow: 'inset 0 0 30px rgba(2, 132, 199, 0.2)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid #1e293b', paddingBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <Radio size={20} color="#38bdf8" className="pulse-alert" />
-                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>
-                        Autonomous VTOL Drone Telemetry (MediQ Aero-1)
-                      </strong>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', background: '#0369a1', color: '#fff', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 900 }}>
-                      ● AUTOPILOT ACTIVE (100% SIGNAL)
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-                    
-                    <div style={{ background: '#1e293b', padding: '0.85rem', borderRadius: '8px', border: '1px solid #334155' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#38bdf8', fontSize: '0.75rem', fontWeight: 800 }}>
-                        <Navigation size={14} /> FLIGHT ALTITUDE
-                      </div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#ffffff', marginTop: '0.25rem' }}>
-                        {droneTelemetry.altitude} m
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>DGCA Corridor Clear</span>
-                    </div>
-
-                    <div style={{ background: '#1e293b', padding: '0.85rem', borderRadius: '8px', border: '1px solid #334155' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#34d399', fontSize: '0.75rem', fontWeight: 800 }}>
-                        <Plane size={14} /> GROUND SPEED
-                      </div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#ffffff', marginTop: '0.25rem' }}>
-                        {droneTelemetry.speed} km/h
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Wind: 6 km/h WNW</span>
-                    </div>
-
-                    <div style={{ background: '#1e293b', padding: '0.85rem', borderRadius: '8px', border: '1px solid #334155' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fbbf24', fontSize: '0.75rem', fontWeight: 800 }}>
-                        <Thermometer size={14} /> COLD-CHAIN TEMP
-                      </div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fbbf24', marginTop: '0.25rem' }}>
-                        {droneTelemetry.temperature} °C
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 700 }}>
-                        Optimal (2–8°C for Insulin)
-                      </span>
-                    </div>
-
-                    <div style={{ background: '#1e293b', padding: '0.85rem', borderRadius: '8px', border: '1px solid #334155' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f43f5e', fontSize: '0.75rem', fontWeight: 800 }}>
-                        <Battery size={14} /> BATTERY LEVEL
-                      </div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#ffffff', marginTop: '0.25rem' }}>
-                        {droneTelemetry.battery}%
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Li-Po Dual Redundancy</span>
-                    </div>
-
-                  </div>
-
-                  <div style={{ marginTop: '1rem', background: '#0f172a', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.78rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                    <span>Live Coordinates: <strong>{droneTelemetry.gpsLat}, {droneTelemetry.gpsLng}</strong></span>
-                    <span style={{ color: '#38bdf8' }}>Flight Time: {flightTimeSeconds}s &bull; Return-to-Home failsafe armed</span>
-                  </div>
-
-                </div>
-              )}
-
               {/* RIDER MODE HUD */}
-              {deliveryMode !== 'drone' && (
-                <div style={{ background: '#1e293b', padding: '1.25rem', borderRadius: '14px', border: '2px solid #059669', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  
-                  {/* Secret Doorstep OTP Banner */}
-                  <div style={{ background: '#0f172a', borderRadius: '10px', padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', border: '1px solid #334155' }}>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>
-                        SECRET DOORSTEP DELIVERY OTP
-                      </div>
-                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#38bdf8', letterSpacing: '0.15em', fontFamily: 'monospace' }}>
-                        {doorstepOtp}
-                      </div>
+              <div style={{ background: '#1e293b', padding: '1.25rem', borderRadius: '14px', border: '2px solid #059669', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                
+                {/* Secret Doorstep OTP Banner */}
+                <div style={{ background: '#0f172a', borderRadius: '10px', padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', border: '1px solid #334155' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>
+                      SECRET DOORSTEP DELIVERY OTP
                     </div>
-                    <span style={{ fontSize: '0.72rem', color: '#a7f3d0', maxWidth: '280px', lineHeight: 1.4 }}>
-                      🔒 Give this 4-digit code to the rider at your door to verify tamper-proof seal.
+                    <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#38bdf8', letterSpacing: '0.15em', fontFamily: 'monospace' }}>
+                      {doorstepOtp}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '0.72rem', background: '#059669', color: '#ffffff', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 900 }}>
+                      DOORSTEP HANDOFF SECURITY
                     </span>
+                    <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '0.25rem' }}>
+                      Share this code with rider Vikram upon arrival
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rider Telemetry Info */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                  <div style={{ background: '#0f172a', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800 }}>INSULATED BAG TEMP</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#34d399', marginTop: '0.15rem' }}>
+                      {riderTelemetry.temperature} °C
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Safe (2–8°C for Insulin)</span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div style={{ background: '#0f172a', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800 }}>ROAD SPEED</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#38bdf8', marginTop: '0.15rem' }}>
+                      {riderTelemetry.speed} km/h
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>EV Ather 450X</span>
+                  </div>
+
+                  <div style={{ background: '#0f172a', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800 }}>EV BATTERY</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fbbf24', marginTop: '0.15rem' }}>
+                      {riderTelemetry.battery}%
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>High Charge</span>
+                  </div>
+
+                  <div style={{ background: '#0f172a', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800 }}>REMAINING DISTANCE</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#a78bfa', marginTop: '0.15rem' }}>
+                      {riderTelemetry.distanceKm} km
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Sola Overbridge</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.3rem' }}>
                         🛵
@@ -795,7 +761,6 @@ export default function BlinkitFulfillmentModal({
                   </div>
 
                 </div>
-              )}
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>

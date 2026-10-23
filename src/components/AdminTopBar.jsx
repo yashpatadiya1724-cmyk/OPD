@@ -50,7 +50,8 @@ export default function AdminTopBar({
     overview: { section: 'Project Exhibition', title: 'MediQ Poster & 5-Step Methodology (SOCCA-12)' },
     ocr: { section: 'AI Vision & Diagnostics', title: 'Handwritten Prescription OCR & Generic Optimizer' },
     abdm: { section: 'National Health Mission', title: 'Ayushman Bharat ABHA Card & Health Locker' },
-    fulfillment: { section: 'Doorstep Fulfillment', title: 'Scheduled Rider Delivery & EV Fleet Tracking' }
+    fulfillment: { section: 'Doorstep Fulfillment', title: 'Scheduled Rider Delivery & EV Fleet Tracking' },
+    rider: { section: 'Rider Operations', title: 'MediQ Rider Console & Doorstep OTP Terminal' }
   };
 
   const currentInfo = roleTitles[currentRole] || { section: 'MediQ', title: 'Healthcare Management' };

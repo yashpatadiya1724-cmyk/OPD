@@ -19,7 +19,6 @@ import {
   HelpCircle,
   ExternalLink,
   Scan,
-  Plane,
   Bike,
   FileText
 } from 'lucide-react';
@@ -92,6 +91,7 @@ export default function AdminSidebar({
         { id: 'ocr', label: 'Prescription OCR (AI)', icon: Scan, badge: 'AI VISION' },
         { id: 'abdm', label: 'ABDM & ABHA Locker', icon: ShieldCheck, badge: 'ABHA' },
         { id: 'fulfillment', label: 'Scheduled Rider Delivery', icon: Bike, badge: 'HOME RIDER' },
+        { id: 'rider', label: 'Rider Mobile Console', icon: Bike, badge: 'RIDER APP' },
       ]
     },
     {

@@ -107,7 +107,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
   // Completed Pharmacy Order Banner
   const [completedOrderNotice, setCompletedOrderNotice] = useState(null);
   const [showBlinkitModal, setShowBlinkitModal] = useState(false);
-  const [blinkitInitialMode, setBlinkitInitialMode] = useState('drone');
+  const [blinkitInitialMode, setBlinkitInitialMode] = useState('express_rider');
 
   // Check-in form fields
   const [patientName, setPatientName] = useState(currentUser?.displayName || '');
@@ -1563,7 +1563,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                 </div>
               </div>
 
-              {/* Blinkit 10-Min & Drone Dispatch Action Bar (PRD v5 Module B) */}
+              {/* Scheduled EV Rider Delivery & Dark-Store Fulfillment Action Bar (PRD v5 Module B) */}
               <div style={{
                 background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
                 borderRadius: '12px',
@@ -1597,7 +1597,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setBlinkitInitialMode('darkstore');
+                      setBlinkitInitialMode('scheduled_rider');
                       setShowBlinkitModal(true);
                     }}
                     style={{
@@ -1622,7 +1622,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setBlinkitInitialMode('drone');
+                      setBlinkitInitialMode('express_rider');
                       setShowBlinkitModal(true);
                     }}
                     style={{
@@ -1640,8 +1640,8 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
                       boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
                     }}
                   >
-                    <Plane size={16} />
-                    <span>🚁 Emergency Drone Drop</span>
+                    <Zap size={16} />
+                    <span>⚡ 15-Min Express Rider</span>
                   </button>
                 </div>
               </div>
@@ -1839,7 +1839,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
         onPaymentSuccess={handleRazorpaySuccess}
       />
 
-      {/* BLINKIT HYPERLOCAL & DRONE FULFILLMENT MODAL (MODULE B) */}
+      {/* BLINKIT HYPERLOCAL & SCHEDULED RIDER FULFILLMENT MODAL (MODULE B) */}
       <BlinkitFulfillmentModal
         isOpen={showBlinkitModal}
         onClose={() => setShowBlinkitModal(false)}

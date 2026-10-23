@@ -115,6 +115,19 @@ const DEMO_ACCOUNTS = {
     designation: 'VP of Platform Operations & Founder',
     platformAccess: 'Full GMV, Onboarding & Settlement Access',
     claims: { role: 'super_admin' }
+  },
+  rider: {
+    uid: 'demo-rider-vikram',
+    displayName: 'Vikram Rathore (EV Delivery Rider)',
+    email: 'vikram.rider@mediq.app',
+    phoneNumber: '9825104921',
+    role: 'rider',
+    photoURL: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+    isGoogle: false,
+    vehicle: 'Ather 450X High-Speed EV (GJ-01-ET-9182)',
+    battery: '88%',
+    zone: 'Sola / Science City / Gota Hub',
+    claims: { role: 'rider' }
   }
 };
 

@@ -797,20 +797,20 @@ export default function ProjectShowcase({ onNavigateToRole }) {
               </button>
             </div>
 
-            {/* 3. Drone Delivery for Insulin & Vaccines */}
-            <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1.5px solid #7c3aed' }}>
+            {/* 3. Scheduled EV Rider Home Delivery for Insulin & Vaccines */}
+            <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1.5px solid #059669' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.72rem', background: '#ede9fe', color: '#6d28d9', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                  <span style={{ fontSize: '0.72rem', background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
                     POSTER ITEM 3 • OPERATIONAL
                   </span>
-                  <span style={{ fontSize: '1.2rem' }}>🚁</span>
+                  <span style={{ fontSize: '1.2rem' }}>🛵</span>
                 </div>
                 <h4 style={{ margin: '0 0 0.4rem', fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-                  Cold-Chain Drone &amp; 10-Min Dark Store Delivery
+                  Scheduled EV Rider Delivery &amp; Cold-Chain Care
                 </h4>
                 <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                  Autonomous VTOL drone aerial delivery for temperature-sensitive emergency medicines (Insulin, Anti-venom, Rabies Vaccines) with 2–8°C telemetry HUD, battery, altitude, and ground speed monitoring.
+                  Certified EV rider fleet for temperature-controlled medicine transport (2–8°C for Insulin &amp; Vaccines) with patient time-slot selection (Express / Morning / Evening) and secret doorstep OTP handoff verification.
                 </p>
               </div>
 
@@ -818,7 +818,7 @@ export default function ProjectShowcase({ onNavigateToRole }) {
                 onClick={() => onNavigateToRole && onNavigateToRole('fulfillment')}
                 style={{
                   marginTop: '1.25rem',
-                  background: '#7c3aed',
+                  background: '#059669',
                   color: '#ffffff',
                   border: 'none',
                   padding: '0.65rem 1rem',
@@ -832,7 +832,7 @@ export default function ProjectShowcase({ onNavigateToRole }) {
                   gap: '0.4rem'
                 }}
               >
-                <span>Open Drone &amp; Blinkit Dispatch</span>
+                <span>Open Rider Delivery &amp; Dispatch Fleet</span>
                 <ArrowRight size={14} />
               </button>
             </div>

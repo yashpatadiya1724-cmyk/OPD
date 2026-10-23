@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Activity, User, Stethoscope, ClipboardList, ShieldCheck,
   Mail, Lock, Phone, Sparkles, CheckCircle2, AlertCircle,
-  FileCheck2, ArrowRight, Building2, Clock, Star
+  FileCheck2, ArrowRight, Building2, Clock, Star, Bike
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +11,7 @@ const ROLES = [
   { id: 'doctor',      label: 'Doctor',      icon: Stethoscope,   color: '#0d9488', bg: '#ccfbf1', desc: 'Call queue, prescribe & dispatch' },
   { id: 'reception',   label: 'Front Desk',  icon: ClipboardList, color: '#d97706', bg: '#fef3c7', desc: 'Walk-ins, triage & token slips' },
   { id: 'pharmacy',    label: 'Pharmacy',    icon: Sparkles,      color: '#7c3aed', bg: '#ede9fe', desc: 'Counter dispense & inventory' },
+  { id: 'rider',       label: 'Rider App',   icon: Bike,          color: '#059669', bg: '#dcfce7', desc: 'Doorstep drop & secret OTP handoff' },
   { id: 'admin',       label: 'Hospital',    icon: ShieldCheck,   color: '#059669', bg: '#dcfce7', desc: 'Operations & KYC workbench' },
   { id: 'super_admin', label: 'Platform',    icon: Building2,     color: '#4338ca', bg: '#e0e7ff', desc: 'GMV, settlements & onboarding' }
 ];
@@ -21,6 +22,7 @@ const DEMO_PROFILES = [
   { key: 'doctor',      name: 'Dr. Rajesh Mehta', sub: 'Doctor · KYC Verified',       avatar: '👨‍⚕️', color: '#ccfbf1', border: '#0d9488' },
   { key: 'reception',   name: 'Kavita Patil',     sub: 'Front Desk · Triage Desk',    avatar: '🏢', color: '#fef3c7', border: '#d97706' },
   { key: 'pharmacy',    name: 'Suresh Gupta',     sub: 'Pharmacy · Main Counter',     avatar: '💊', color: '#ede9fe', border: '#7c3aed' },
+  { key: 'rider',       name: 'Vikram Rathore',   sub: 'EV Rider · Ather 450X',       avatar: '🛵', color: '#dcfce7', border: '#059669' },
   { key: 'admin',       name: 'Admin Anil',       sub: 'Superintendent · Analytics',  avatar: '📊', color: '#dcfce7', border: '#059669' },
   { key: 'super_admin', name: 'Sunita Rao',       sub: 'Platform Super Admin',        avatar: '🛡️', color: '#e0e7ff', border: '#4338ca' }
 ];

@@ -280,8 +280,11 @@ function AppContent() {
         )}
 
         {/* VIEW 14: SCHEDULED RIDER DELIVERY & FLEET TRACKER */}
-        {currentRole === 'fulfillment' && (
-          <ScheduledRiderDeliveryView onBackToDirectory={() => setCurrentRole('hospitals')} />
+        {(currentRole === 'fulfillment' || currentRole === 'rider') && (
+          <ScheduledRiderDeliveryView 
+            defaultTab={currentRole === 'rider' ? 'rider_terminal' : 'patient_order'}
+            onBackToDirectory={() => setCurrentRole('hospitals')} 
+          />
         )}
       </main>
 
@@ -295,12 +298,12 @@ function AppContent() {
         }}
       />
 
-      {/* Global Blinkit & Drone Delivery Modal */}
+      {/* Global Scheduled EV Rider Fulfillment Modal */}
       <BlinkitFulfillmentModal
         isOpen={showDirectFulfillmentModal}
         onClose={() => setShowDirectFulfillmentModal(false)}
         initialMedicines={activeFulfillmentOrder?.medicines || ['Human Actrapid Insulin 40IU', 'Paracetamol 650mg', 'Amoxicillin 500mg']}
-        initialMode={activeFulfillmentOrder?.mode || 'drone'}
+        initialMode={activeFulfillmentOrder?.mode || 'express_rider'}
         doctorName={activeFulfillmentOrder?.doctorName || 'Dr. Rajesh Mehta'}
         patientName={currentUser?.displayName || 'Ravi Kumar Patel'}
       />

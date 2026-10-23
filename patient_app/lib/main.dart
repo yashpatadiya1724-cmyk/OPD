@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'pharmacy_marketplace.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -696,6 +697,9 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         selectedHospitalId: _selectedHospitalId,
         selectedHospitalName: _selectedHospitalName,
       ),
+      PatientPharmacyTab(
+        patientId: widget.currentUser['email']?.toString().replaceAll('.', '_') ?? 'guest',
+      ),
       OPDHistoryTab(
         currentUser: widget.currentUser,
       ),
@@ -728,6 +732,11 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
               icon: Icon(Icons.confirmation_number_outlined, color: Color(0xFF64748B)),
               selectedIcon: Icon(Icons.confirmation_number, color: Color(0xFF0284C7)),
               label: 'Live Queue',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.medication_outlined, color: Color(0xFF64748B)),
+              selectedIcon: Icon(Icons.medication, color: Color(0xFF10B981)),
+              label: 'Medicines',
             ),
             NavigationDestination(
               icon: Icon(Icons.history_outlined, color: Color(0xFF64748B)),
@@ -771,6 +780,84 @@ class _HospitalDiscoveryTabState extends State<HospitalDiscoveryTab> {
     'Pediatrics / Child',
   ];
 
+  void _showOnboardHospitalDialog() {
+    final nameCtrl = TextEditingController();
+    final taglineCtrl = TextEditingController(text: 'Leading Multi-Speciality Healthcare & Research Facility');
+    final cityCtrl = TextEditingController(text: 'New Delhi');
+    final addressCtrl = TextEditingController(text: 'Sector 14, Ring Road');
+    final specialtiesCtrl = TextEditingController(text: 'General Medicine, Pediatrics, Cardiology, Orthopedics');
+    final phoneCtrl = TextEditingController(text: '011-28901234');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.local_hospital, color: Color(0xFF0284C7)),
+            SizedBox(width: 8),
+            Text('+ Onboard Hospital', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Hospital Name *', hintText: 'e.g. Apex Superspeciality Hospital')),
+              const SizedBox(height: 8),
+              TextField(controller: taglineCtrl, decoration: const InputDecoration(labelText: 'Tagline / Description')),
+              const SizedBox(height: 8),
+              TextField(controller: cityCtrl, decoration: const InputDecoration(labelText: 'City')),
+              const SizedBox(height: 8),
+              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Full Address')),
+              const SizedBox(height: 8),
+              TextField(controller: specialtiesCtrl, decoration: const InputDecoration(labelText: 'Specialties (comma-separated)')),
+              const SizedBox(height: 8),
+              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Contact Phone')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final hospId = 'hosp-${DateTime.now().millisecondsSinceEpoch}';
+              final specs = specialtiesCtrl.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+              await FirebaseFirestore.instance.collection('hospitals').doc(hospId).set({
+                'id': hospId,
+                'name': nameCtrl.text.trim(),
+                'tagline': taglineCtrl.text.trim(),
+                'address': addressCtrl.text.trim(),
+                'city': cityCtrl.text.trim(),
+                'rating': 4.8,
+                'reviewsCount': 120,
+                'distance': '1.2 km',
+                'specialties': specs.isNotEmpty ? specs : ['General Medicine', 'Pediatrics'],
+                'avgWaitMinutes': 12,
+                'activeDoctorsCount': 4,
+                'openNow': true,
+                'timing': '24x7 Emergency | OPD: 8:00 AM - 6:00 PM',
+                'features': ['Live Token Tracker', 'Digital Prescription', 'Express Pharmacy'],
+                'image': 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80',
+                'contactPhone': phoneCtrl.text.trim(),
+                'commissionRate': 10,
+                'createdAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✓ Hospital onboarded successfully to live Firebase!')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7), foregroundColor: Colors.white),
+            child: const Text('Onboard Facility', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -805,6 +892,13 @@ class _HospitalDiscoveryTabState extends State<HospitalDiscoveryTab> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            onPressed: _showOnboardHospitalDialog,
+            icon: const Icon(Icons.add_business, color: Color(0xFF0284C7)),
+            tooltip: '+ Onboard Hospital',
+          ),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('hospitals').snapshots(),
@@ -1063,6 +1157,7 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
   String? _activePatientName;
   String? _selectedDoctorId;
   String _entryMode = 'walkin';
+  String _selectedLane = 'normal'; // 'normal' | 'senior' | 'emergency'
   final String _selectedSlot = '10:30 AM - 10:45 AM';
 
   final _nameController = TextEditingController();
@@ -1147,6 +1242,10 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
 
     int nextToken = 1;
     final newDocRef = tokenColRef.doc();
+    final laneWeight = _selectedLane == 'emergency' ? 1000 : (_selectedLane == 'senior' ? 50 : 0);
+    final initialPriority = laneWeight + (_entryMode == 'slot' ? 30 : 0);
+    final docClean = _selectedDoctorId!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase().padRight(3, 'X');
+    final docCode = docClean.length > 3 ? docClean.substring(docClean.length - 3) : docClean;
 
     try {
       final counterRef = FirebaseFirestore.instance
@@ -1159,14 +1258,21 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
         final snap = await tx.get(counterRef);
         final current = snap.exists ? (snap.data()?['lastToken'] ?? 0) : 0;
         nextToken = current + 1;
+        final tokenDisplayCode = 'D$docCode-${nextToken.toString().padLeft(2, '0')}';
         tx.set(counterRef, {'lastToken': nextToken, 'dateKey': todayKey}, SetOptions(merge: true));
         tx.set(newDocRef, {
           'tokenNumber': nextToken,
+          'tokenCode': tokenDisplayCode,
           'patientName': name,
           'phoneNumber': phone,
           'reason': _reasonController.text.trim(),
           'doctorId': _selectedDoctorId,
           'status': 'waiting',
+          'lane': _selectedLane,
+          'laneWeight': laneWeight,
+          'priorityScore': initialPriority,
+          'skipCount': 0,
+          'secondMissNoShow': false,
           'date': todayKey,
           'createdAt': FieldValue.serverTimestamp(),
           'bookingMode': _entryMode,
@@ -1176,14 +1282,21 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
     } catch (e) {
       // Graceful offline fallback: write document directly so offline cache queues it
       nextToken = (DateTime.now().minute % 30) + 1;
+      final tokenDisplayCode = 'D$docCode-${nextToken.toString().padLeft(2, '0')}';
       try {
         await newDocRef.set({
           'tokenNumber': nextToken,
+          'tokenCode': tokenDisplayCode,
           'patientName': name,
           'phoneNumber': phone,
           'reason': _reasonController.text.trim(),
           'doctorId': _selectedDoctorId,
           'status': 'waiting',
+          'lane': _selectedLane,
+          'laneWeight': laneWeight,
+          'priorityScore': initialPriority,
+          'skipCount': 0,
+          'secondMissNoShow': false,
           'date': todayKey,
           'createdAt': FieldValue.serverTimestamp(),
           'bookingMode': _entryMode,
@@ -1212,6 +1325,27 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
         'date': todayKey,
         'timestamp': DateTime.now().toIso8601String(),
       }, SetOptions(merge: true));
+
+      // Record transaction to Firestore ledger if slot prepayment
+      if (_entryMode == 'slot') {
+        final txId = 'pay_${DateTime.now().millisecondsSinceEpoch}';
+        await FirebaseFirestore.instance.collection('transactions').doc(txId).set({
+          'id': txId,
+          'gatewayTxId': 'pay_${DateTime.now().millisecondsSinceEpoch}',
+          'razorpayKey': 'rzp_test_TmxKQ0fOUHs5z8',
+          'amount': 500,
+          'platformCut': 50,
+          'hospitalPayout': 450,
+          'patientName': name,
+          'doctorId': _selectedDoctorId,
+          'hospitalId': widget.selectedHospitalId,
+          'hospitalName': widget.selectedHospitalName,
+          'paymentMethod': 'Razorpay / UPI (rzp_test_TmxKQ0fOUHs5z8)',
+          'status': 'settled',
+          'timestamp': DateTime.now().toIso8601String(),
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
       await _saveActiveToken(_selectedDoctorId!, newDocRef.id, nextToken, name);
     } catch (e) {
@@ -1269,9 +1403,25 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
               final docData = docSnap.data?.data() as Map<String, dynamic>? ?? {};
               final tokenData = tokenSnap.data?.data() as Map<String, dynamic>? ?? {};
               final status = tokenData['status'] ?? 'waiting';
+              final pharmacyStatus = tokenData['pharmacyStatus'] ?? '';
               final roomNumber = docData['roomNumber'] ?? 'Room 102';
               final floorWing = docData['floorWing'] ?? 'General OPD Block';
               final docName = docData['name'] ?? 'Doctor';
+
+              // AUTO-CLEAR: When pharmacy completes order and dispenses medicines, remove queue screen!
+              if (status == 'dispensed' || pharmacyStatus == 'dispensed') {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _clearActiveToken();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✓ Pharmacy Order Dispensed! Your OPD Visit is Complete.'),
+                        backgroundColor: Color(0xFF059669),
+                      ),
+                    );
+                  }
+                });
+              }
 
               final isCompleted = status == 'completed';
               final isInProgress = status == 'in-progress';
@@ -1289,6 +1439,52 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
                 body: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    // SECTION: DOCTOR DELAY BROADCAST NOTICE
+                    if (docData['queuePaused'] == true) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD97706),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '⚠️ DOCTOR DELAY BROADCAST ACTIVE',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF92400E)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Doctor is delayed by ~${docData['expectedDelayMinutes'] ?? 30} mins. Reason: ${docData['pauseReason'] ?? 'Emergency surgery'}.',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF78350F), fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     // SECTION 7.9: SMART LEAVE-NOW ENGINE ALERT BANNER
                     if (!isInProgress && !isCompleted)
                       Container(
@@ -1758,6 +1954,52 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
                       selectedColor: const Color(0xFF0284C7),
                       labelStyle: TextStyle(
                         color: _entryMode == 'slot' ? Colors.white : const Color(0xFF334155),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              const Text('Priority Triage Lane (PRD Section 6.2):', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Center(child: Text('👤 Normal', style: TextStyle(fontSize: 11))),
+                      selected: _selectedLane == 'normal',
+                      onSelected: (s) => setState(() => _selectedLane = 'normal'),
+                      selectedColor: const Color(0xFF0284C7),
+                      labelStyle: TextStyle(
+                        color: _selectedLane == 'normal' ? Colors.white : const Color(0xFF334155),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Center(child: Text('🧓 Priority (+50)', style: TextStyle(fontSize: 11))),
+                      selected: _selectedLane == 'senior',
+                      onSelected: (s) => setState(() => _selectedLane = 'senior'),
+                      selectedColor: const Color(0xFFD97706),
+                      labelStyle: TextStyle(
+                        color: _selectedLane == 'senior' ? Colors.white : const Color(0xFF334155),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Center(child: Text('🚨 Emergency', style: TextStyle(fontSize: 11))),
+                      selected: _selectedLane == 'emergency',
+                      onSelected: (s) => setState(() => _selectedLane = 'emergency'),
+                      selectedColor: const Color(0xFFE11D48),
+                      labelStyle: TextStyle(
+                        color: _selectedLane == 'emergency' ? Colors.white : const Color(0xFF334155),
                         fontWeight: FontWeight.w800,
                       ),
                     ),

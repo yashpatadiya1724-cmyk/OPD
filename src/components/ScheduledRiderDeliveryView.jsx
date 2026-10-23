@@ -146,11 +146,11 @@ const FLEET_RIDERS = [
   }
 ];
 
-export default function ScheduledRiderDeliveryView({ onBackToDirectory }) {
+export default function ScheduledRiderDeliveryView({ onBackToDirectory, defaultTab = 'patient_order' }) {
   const { currentUser } = useAuth();
 
   // Active top-level subview: 'patient_order' | 'pharmacist_dispatch' | 'rider_terminal'
-  const [activeTab, setActiveTab] = useState('patient_order');
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   // Order Configuration State
   const [selectedDay, setSelectedDay] = useState('today'); // 'today' | 'tomorrow' | 'day_after'

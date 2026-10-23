@@ -17,7 +17,8 @@ import {
   Clock,
   Printer,
   ChevronRight,
-  Plane
+  Bike,
+  Zap
 } from 'lucide-react';
 
 // Master samples of Indian handwritten & clinic prescriptions
@@ -792,12 +793,12 @@ export default function PrescriptionOCRView({ onOrderFulfillment, onOpenAbdmLock
                         totalPrice: activeCost,
                         isGeneric: genericToggle,
                         doctorName: selectedSample.doctorName,
-                        mode: 'drone'
+                        mode: 'express_rider'
                       });
                     } else {
                       setOrderNotification({
-                        title: 'Cold-Chain Drone Dispatch Initialized!',
-                        message: `Emergency Drone Aero-MediQ launched with ${selectedSample.medicines.length} medicines. Estimated delivery: 8 mins.`
+                        title: 'EV Rider Dispatch Initialized!',
+                        message: `Express EV Rider Vikram Sharma en route with ${selectedSample.medicines.length} medicines in insulated cold-pack. Doorstep OTP: 7391. ETA: 12 mins.`
                       });
                     }
                   }}
@@ -816,8 +817,8 @@ export default function PrescriptionOCRView({ onOrderFulfillment, onOpenAbdmLock
                     boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)'
                   }}
                 >
-                  <Plane size={18} />
-                  <span>🚁 Emergency Drone Delivery</span>
+                  <Bike size={18} />
+                  <span>🛵 15-Min EV Rider Delivery</span>
                 </button>
 
                 <button
