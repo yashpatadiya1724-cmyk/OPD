@@ -199,7 +199,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                   'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                   width: 24,
                   height: 24,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
+                  errorBuilder: (_, error, stackTrace) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
                 ),
                 const SizedBox(width: 10),
                 const Text(
@@ -301,7 +301,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
               width: 24,
               height: 24,
-              errorBuilder: (_, __, ___) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
+              errorBuilder: (_, error, stackTrace) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
             ),
             const SizedBox(width: 10),
             const Text(
@@ -442,7 +442,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0284C7).withOpacity(0.35),
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.35),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -510,7 +510,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                         width: 22,
                         height: 22,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 28, color: Color(0xFF4285F4)),
+                        errorBuilder: (_, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 28, color: Color(0xFF4285F4)),
                       ),
                       const SizedBox(width: 12),
                       const Text(
@@ -1375,11 +1375,14 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
         }, SetOptions(merge: true));
       }
 
+      if (!mounted) return;
       setState(() => _reviewSubmitted = true);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit review: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to submit review: $e')),
+        );
+      }
     }
   }
 
@@ -1500,7 +1503,7 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
                           border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF59E0B).withOpacity(0.15),
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -1824,7 +1827,7 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: (ph['color'] as Color).withOpacity(0.12),
+                                              color: (ph['color'] as Color).withValues(alpha: 0.12),
                                               borderRadius: BorderRadius.circular(6),
                                             ),
                                             child: Text(ph['badge'] as String, style: TextStyle(color: ph['color'] as Color, fontWeight: FontWeight.w900, fontSize: 9)),
@@ -1834,7 +1837,7 @@ class _PatientBookingLiveTabState extends State<PatientBookingLiveTab> {
                                     ],
                                   ),
                                 );
-                              }).toList(),
+                              }),
                             ],
                           ),
                         ),

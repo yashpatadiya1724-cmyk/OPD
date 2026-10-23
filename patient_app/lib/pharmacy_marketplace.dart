@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 // ============================================================
 // PATIENT — MULTI-PHARMACY RX VIEW (MediQ v5, F22)
@@ -57,16 +56,6 @@ class _PharmacyMarketplaceScreenState extends State<PharmacyMarketplaceScreen> {
       case 'generic_available': return const Color(0xFF059669);
       case 'not_available': return const Color(0xFFEF4444);
       default: return const Color(0xFF64748B);
-    }
-  }
-
-  String _getItemStatusLabel(String status) {
-    switch (status) {
-      case 'available': return '✅ Available';
-      case 'alternative_available': return '🔄 Alternative';
-      case 'generic_available': return '💰 Generic Available';
-      case 'not_available': return '❌ Not Available';
-      default: return status;
     }
   }
 
@@ -277,7 +266,6 @@ class _PharmacyMarketplaceScreenState extends State<PharmacyMarketplaceScreen> {
     final matchScore = match['matchScore'] ?? 0;
     final availableCount = match['availableCount'] ?? 0;
     final alternativeCount = match['alternativeCount'] ?? 0;
-    final notAvailableCount = match['notAvailableCount'] ?? 0;
     final totalPrice = match['totalPrice'] ?? 0;
     final distance = match['distance'];
     final rating = match['rating'] ?? 0;
@@ -285,7 +273,6 @@ class _PharmacyMarketplaceScreenState extends State<PharmacyMarketplaceScreen> {
     final estimatedTime = match['estimatedTime'] ?? '';
     final services = (match['services'] as List?) ?? ['pickup'];
     final items = (match['items'] as List?) ?? [];
-    final pharmacyId = match['pharmacyId'] ?? '';
 
     final isFullMatch = matchScore == 100;
 
@@ -576,6 +563,7 @@ class _PharmacyMarketplaceScreenState extends State<PharmacyMarketplaceScreen> {
                             .toList();
 
                         final pickupCode = (1000 + (DateTime.now().millisecondsSinceEpoch % 9000)).toString();
+                        final messenger = ScaffoldMessenger.of(context);
 
                         await FirebaseFirestore.instance.collection('pharmacyOrders').add({
                           'rxId': widget.rxId,
@@ -597,7 +585,7 @@ class _PharmacyMarketplaceScreenState extends State<PharmacyMarketplaceScreen> {
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             SnackBar(
                               content: Text('✅ Order placed with $pharmacyName! Pickup code: $pickupCode'),
                               backgroundColor: const Color(0xFF059669),

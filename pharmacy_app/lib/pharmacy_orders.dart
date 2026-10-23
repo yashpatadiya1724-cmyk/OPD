@@ -379,7 +379,7 @@ class _PharmacyOrdersTabState extends State<PharmacyOrdersTab> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  '${fulfillment == "delivery" ? "Delivery" : "Pickup"} • ${placedAt != null ? DateFormat('dd MMM, hh:mm a').format(placedAt.toDate()) : ""}',
+                  '${fulfillment == "delivery" ? "Delivery" : "Pickup"} • Patient: $patientId • ${placedAt != null ? DateFormat('dd MMM, hh:mm a').format(placedAt.toDate()) : ""}',
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                 ),
               ],

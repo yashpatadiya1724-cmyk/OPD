@@ -37,9 +37,36 @@ class MediQRiderApp extends StatelessWidget {
           seedColor: const Color(0xFF059669),
           primary: const Color(0xFF059669),
           secondary: const Color(0xFF0284C7),
-          surface: const Color(0xFFF8FAFC),
+          surface: const Color(0xFFFFFFFF),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        cardTheme: CardThemeData(
+          color: const Color(0xFFFFFFFF),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFFFFFF),
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          iconTheme: IconThemeData(color: Color(0xFF0F172A)),
+          titleTextStyle: TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
@@ -60,16 +87,16 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> with SingleTickerProv
 
   // Duty Shift State
   bool _isOnline = true;
-  String _riderName = 'Vikram Rathore';
-  String _riderId = 'GJ-RDR-402';
-  String _vehicle = 'Ather 450X High-Speed EV';
-  int _evBattery = 88;
+  final String _riderName = 'Vikram Rathore';
+  final String _riderId = 'GJ-RDR-402';
+  final String _vehicle = 'Ather 450X High-Speed EV';
+  final int _evBattery = 88;
   double _coldBagTemp = 4.4;
 
   // Earnings & stats
   int _todayEarnings = 850;
   int _completedTrips = 8;
-  double _rating = 4.96;
+  final double _rating = 4.96;
 
   // Active Mission State
   bool _hasActiveMission = true;
@@ -77,7 +104,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> with SingleTickerProv
   String _customerName = 'Ravi Kumar Patel';
   String _customerPhone = '+91 98251 04921';
   String _deliveryAddress = 'B-402, Shivalik Residency, Near Sola Bridge, Ahmedabad';
-  String _pickupSource = 'Pradhan Mantri Jan Aushadhi Kendra (Dark-Store Hub #3)';
+  final String _pickupSource = 'Pradhan Mantri Jan Aushadhi Kendra (Dark-Store Hub #3)';
   String _slotLabel = '⚡ 15-Min Express Delivery';
   int _collectAmount = 224;
   String _correctOtp = '7391';
@@ -90,7 +117,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> with SingleTickerProv
   Timer? _telemetryTimer;
 
   // Available orders queue
-  List<Map<String, dynamic>> _availableOrders = [
+  final List<Map<String, dynamic>> _availableOrders = [
     {
       'id': 'MEDIQ-SLOT-9142',
       'customer': 'Priya Shah',
@@ -529,7 +556,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> with SingleTickerProv
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF059669).withOpacity(0.25),
+                  color: const Color(0xFF059669).withValues(alpha: 0.25),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -540,7 +567,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.electric_moped_rounded, color: Colors.white, size: 28),

@@ -196,7 +196,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
                   'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                   width: 24,
                   height: 24,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
+                  errorBuilder: (_, error, stackTrace) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
                 ),
                 const SizedBox(width: 10),
                 const Text(
@@ -323,7 +323,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
               'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
               width: 24,
               height: 24,
-              errorBuilder: (_, __, ___) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
+              errorBuilder: (_, error, stackTrace) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
             ),
             const SizedBox(width: 10),
             const Text(
@@ -475,7 +475,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0D9488).withOpacity(0.35),
+                            color: const Color(0xFF0D9488).withValues(alpha: 0.35),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -540,7 +540,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
                         'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                         width: 22,
                         height: 22,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 28, color: Color(0xFF4285F4)),
+                        errorBuilder: (_, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 28, color: Color(0xFF4285F4)),
                       ),
                       const SizedBox(width: 12),
                       const Text(
@@ -777,14 +777,15 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               await FirebaseFirestore.instance.collection('doctors').doc(widget.doctorId).update({
                 'roomNumber': _roomController.text.trim(),
                 'floorWing': _wingController.text.trim(),
                 'locationUpdatedAt': FieldValue.serverTimestamp(),
               });
+              if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(content: Text('✓ Room updated! Patients notified in real time.')),
                 );
               }
@@ -859,13 +860,33 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                 ),
                 const SizedBox(height: 8),
                 ...reasons.map((r) {
-                  return RadioListTile<String>(
-                    dense: true,
-                    title: Text(r, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    value: r,
-                    groupValue: selectedReason,
-                    activeColor: const Color(0xFFD97706),
-                    onChanged: (val) => setDlgState(() => selectedReason = val ?? r),
+                  final isSelected = selectedReason == r;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => setDlgState(() => selectedReason = r),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: isSelected ? const Color(0xFFD97706) : const Color(0xFF94A3B8),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              r,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                color: const Color(0xFF1E293B),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 }),
               ],
@@ -1057,12 +1078,12 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                             children: [
                               Row(
                                 children: [
-                                  Radio<String>(
-                                    value: ph['id'] as String,
-                                    groupValue: selectedPharm,
-                                    activeColor: const Color(0xFF0284C7),
-                                    onChanged: (v) => setDialogState(() => selectedPharm = v ?? 'pharm-hospital'),
+                                  Icon(
+                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
+                                    size: 18,
                                   ),
+                                  const SizedBox(width: 8),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -1079,7 +1100,7 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: (ph['color'] as Color).withOpacity(0.12),
+                                      color: (ph['color'] as Color).withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text('Token: $prefix-XX', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: ph['color'] as Color)),
@@ -1090,7 +1111,7 @@ class _DoctorConsoleTabState extends State<DoctorConsoleTab> {
                           ),
                         ),
                       );
-                    }).toList(),
+                    }),
 
                     const SizedBox(height: 8),
                     Container(

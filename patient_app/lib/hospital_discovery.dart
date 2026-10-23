@@ -22,7 +22,6 @@ class HospitalDiscoveryScreen extends StatefulWidget {
 class _HospitalDiscoveryScreenState extends State<HospitalDiscoveryScreen> {
   String _searchQuery = '';
   String _selectedFilter = 'all';
-  final List<String> _filters = ['all', 'hospital', 'clinic', 'jan_aushadhi'];
 
   @override
   Widget build(BuildContext context) {
@@ -271,8 +270,6 @@ class _HospitalDiscoveryScreenState extends State<HospitalDiscoveryScreen> {
     final isOpen = hospital['isOpen'] ?? true;
     final consultFee = hospital['consultFee'] ?? 500;
     final waitTime = hospital['avgWaitTime'] ?? '15 min';
-    final photos = (hospital['photos'] as List?) ?? [];
-    final hospitalId = hospital['id'] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),

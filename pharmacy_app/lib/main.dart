@@ -837,7 +837,7 @@ class _StaffFrontDeskTabState extends State<StaffFrontDeskTab> {
   final _phoneCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController(text: 'Routine OPD Consultation');
   String _selectedLane = 'normal';
-  String _selectedDoctorId = 'dr-mehta';
+  final String _selectedDoctorId = 'dr-mehta';
   bool _isIssuing = false;
 
   Future<void> _issueWalkInSlip() async {

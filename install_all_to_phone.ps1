@@ -55,7 +55,7 @@ foreach ($app in $apps) {
         if ($LASTEXITCODE -ne 0 -and $installOutput -match "INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
             Write-Host "🔄 Signature mismatch detected. Reinstalling $($app.Package)..." -ForegroundColor Yellow
             adb -s $deviceId uninstall $app.Package
-            adb -s $deviceId install -r $app.Path
+            adb -s $deviceId install -r $apkToInstall
         }
         if ($LASTEXITCODE -eq 0) {
             Write-Host "✅ $($app.Name) installed successfully!" -ForegroundColor Green
