@@ -16,10 +16,12 @@ doctor_app/build/
 patient_app/build/
 pharmacy_app/build/
 rider_app/build/
+rider_app/android/.gradle/
 doctor_app/.dart_tool/
 patient_app/.dart_tool/
 pharmacy_app/.dart_tool/
 rider_app/.dart_tool/
+*/android/local.properties
 
 # Release APK binaries (large files)
 release_apks/
