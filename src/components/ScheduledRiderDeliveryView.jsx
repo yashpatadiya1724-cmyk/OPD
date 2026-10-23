@@ -260,7 +260,7 @@ export default function ScheduledRiderDeliveryView({ onBackToDirectory, defaultT
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', position: 'relative', zIndex: 1 }}>
           <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', padding: '0.35rem 0.85rem', borderRadius: '2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-surface)', padding: '0.35rem 0.85rem', borderRadius: '2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', marginBottom: '0.75rem', border: '1px solid var(--border-subtle)' }}>
               <Bike size={16} color="#059669" />
               <span style={{ fontSize: '0.74rem', fontWeight: 900, color: '#059669', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                 HYPERLOCAL RIDER FLEET &bull; SCHEDULED HOME DELIVERY
@@ -277,15 +277,15 @@ export default function ScheduledRiderDeliveryView({ onBackToDirectory, defaultT
 
           {/* Quick Fleet Highlights Pills */}
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ background: '#ffffff', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bg-surface)', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>ACTIVE EV RIDERS</div>
               <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#059669' }}>4 On Duty</div>
             </div>
-            <div style={{ background: '#ffffff', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bg-surface)', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>AVG EXPRESS ETA</div>
               <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0284c7' }}>14 Mins</div>
             </div>
-            <div style={{ background: '#ffffff', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bg-surface)', padding: '0.55rem 0.95rem', borderRadius: '14px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', textAlign: 'center' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>COLD-CHAIN BAG</div>
               <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#d97706' }}>2°C – 8°C</div>
             </div>
@@ -791,8 +791,8 @@ export default function ScheduledRiderDeliveryView({ onBackToDirectory, defaultT
                         justifyContent: 'center',
                         gap: '0.4rem',
                         padding: '0.5rem',
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
                         borderRadius: '8px',
                         color: '#0284c7',
                         fontWeight: 800,
@@ -811,8 +811,8 @@ export default function ScheduledRiderDeliveryView({ onBackToDirectory, defaultT
                         justifyContent: 'center',
                         gap: '0.4rem',
                         padding: '0.5rem',
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
                         borderRadius: '8px',
                         color: '#059669',
                         fontWeight: 800,

@@ -323,10 +323,11 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
         <div style={{
           display: 'flex',
           gap: '0.75rem',
-          background: '#ffffff',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
           padding: '0.55rem',
           borderRadius: '16px',
-          boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
+          boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
           maxWidth: '820px',
           flexWrap: 'wrap'
         }}>
@@ -342,7 +343,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
                 outline: 'none',
                 fontSize: '0.95rem',
                 fontWeight: 700,
-                color: '#090d16',
+                color: 'var(--text-primary)',
                 width: '100%',
                 background: 'transparent'
               }}
@@ -356,7 +357,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
           {searchQuery && (
             <button 
               onClick={() => setSearchQuery('')}
-              style={{ background: '#f1f5f9', border: 'none', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 800, color: '#475569' }}
+              style={{ background: 'var(--bg-inner)', border: '1px solid var(--border-subtle)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 800, color: 'var(--text-muted)' }}
             >
               Clear
             </button>
@@ -520,26 +521,26 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
         flexWrap: 'wrap',
         gap: '1rem',
         marginBottom: '1.5rem',
-        background: '#ffffff',
+        background: 'var(--bg-surface)',
         padding: '0.85rem 1.25rem',
         borderRadius: '1rem',
-        border: '1.5px solid #e2e8f0'
+        border: '1px solid var(--border-subtle)'
       }}>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)' }}>
             Filter Specialty:
           </span>
           <select
             value={selectedSpecialty}
             onChange={(e) => setSelectedSpecialty(e.target.value)}
             style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
+              background: 'var(--bg-inner)',
+              border: '1px solid var(--border-subtle)',
               padding: '0.4rem 0.75rem',
               borderRadius: '0.5rem',
               fontSize: '0.85rem',
               fontWeight: 800,
-              color: '#090d16',
+              color: 'var(--text-primary)',
               outline: 'none'
             }}
           >
@@ -555,9 +556,9 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
           <button
             onClick={() => setFilterWait(!filterWait)}
             style={{
-              background: filterWait ? '#ecfdf5' : '#f8fafc',
-              border: filterWait ? '1.5px solid #10b981' : '1px solid #cbd5e1',
-              color: filterWait ? '#047857' : '#475569',
+              background: filterWait ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-inner)',
+              border: filterWait ? '1.5px solid #10b981' : '1px solid var(--border-subtle)',
+              color: filterWait ? '#059669' : 'var(--text-secondary)',
               padding: '0.4rem 0.75rem',
               borderRadius: '0.5rem',
               fontSize: '0.8rem',
@@ -592,13 +593,13 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
               key={hosp.id}
               className="pinterest-card"
               style={{
-                background: '#ffffff',
-                border: isCurrentlyActive ? '2.5px solid #0284c7' : '1.5px solid #e2e8f0',
+                background: 'var(--bg-surface)',
+                border: isCurrentlyActive ? '2.5px solid #0284c7' : '1px solid var(--border-subtle)',
                 borderRadius: '20px',
                 overflow: 'hidden',
                 boxShadow: isCurrentlyActive 
                   ? '0 14px 32px -6px rgba(2, 132, 199, 0.25)' 
-                  : '0 6px 20px -4px rgba(15, 23, 42, 0.06)',
+                  : 'var(--card-shadow)',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative'
@@ -786,7 +787,7 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
           padding: '1rem'
         }}>
           <div style={{
-            background: '#ffffff',
+            background: 'var(--bg-surface)',
             borderRadius: '1.25rem',
             maxWidth: '680px',
             width: '100%',
@@ -794,14 +795,14 @@ export default function HospitalDirectory({ onSelectHospital, activeHospitalId, 
             overflowY: 'auto',
             padding: '1.75rem',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-            border: '2px solid #e2e8f0'
+            border: '1px solid var(--border-subtle)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#0284c7', textTransform: 'uppercase' }}>
                   HOSPITAL OPD CLINICIAN ROSTER
                 </span>
-                <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#090d16', margin: '0.2rem 0' }}>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.2rem 0' }}>
                   {modalHospital.name}
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600, margin: 0 }}>

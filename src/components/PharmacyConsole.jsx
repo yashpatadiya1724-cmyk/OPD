@@ -522,10 +522,10 @@ export default function PharmacyConsole() {
           
           {/* Pharmacy Filter Pills & Search */}
           <div style={{
-            background: '#ffffff',
+            background: 'var(--bg-surface)',
             padding: '1rem',
             borderRadius: '14px',
-            border: '1.5px solid #e2e8f0',
+            border: '1px solid var(--border-subtle)',
             marginBottom: '1.25rem',
             display: 'flex',
             flexDirection: 'column',
@@ -644,8 +644,8 @@ export default function PharmacyConsole() {
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
-                      background: '#ffffff',
-                      boxShadow: '0 4px 16px -2px rgba(15, 23, 42, 0.08)'
+                      background: 'var(--bg-surface)',
+                      boxShadow: 'var(--card-shadow)'
                     }}
                   >
                     <div>
@@ -1331,8 +1331,8 @@ export default function PharmacyConsole() {
                 <div
                   key={order.id}
                   style={{
-                    background: '#ffffff',
-                    border: order.status === 'ON_ROUTE' ? '2px solid #059669' : '1px solid #cbd5e1',
+                    background: 'var(--bg-surface)',
+                    border: order.status === 'ON_ROUTE' ? '2px solid #059669' : '1px solid var(--border-subtle)',
                     borderRadius: '12px',
                     padding: '1.25rem',
                     display: 'flex',
@@ -1466,13 +1466,14 @@ export default function PharmacyConsole() {
           <div
             className="glass-card"
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
               maxWidth: '520px',
               width: '100%',
               padding: '1.75rem',
               borderRadius: '16px',
               boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
-              color: '#0f172a'
+              color: 'var(--text-primary)'
             }}
             onClick={(e) => e.stopPropagation()}
           >

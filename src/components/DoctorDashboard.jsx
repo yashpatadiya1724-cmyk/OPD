@@ -828,7 +828,7 @@ export default function DoctorDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
             {skippedTokens.map(st => (
               <div key={st.id} style={{
-                background: '#ffffff',
+                background: 'var(--bg-surface)',
                 border: '1px solid #fcd34d',
                 borderRadius: '10px',
                 padding: '0.85rem 1rem',

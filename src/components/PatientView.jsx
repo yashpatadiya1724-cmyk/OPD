@@ -1403,7 +1403,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
           {/* POST-CONSULTATION RATING & REVIEW CARD (MediQ PRD Section 9.10) */}
           {myTokenData?.status === 'completed' && (
             <div style={{
-              background: '#ffffff',
+              background: 'var(--bg-surface)',
               border: '2px solid #10b981',
               borderRadius: '1.25rem',
               padding: '1.75rem',
@@ -1411,7 +1411,7 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
               boxShadow: '0 8px 24px rgba(16, 185, 129, 0.12)'
             }}>
               <div style={{ fontSize: '2.2rem', marginBottom: '0.35rem' }}>🩺</div>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 900, color: '#090d16', margin: '0 0 0.35rem' }}>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 0.35rem' }}>
                 How was your OPD Consultation?
               </h3>
               <p style={{ fontSize: '0.88rem', color: '#475569', fontWeight: 600, margin: '0 0 1.25rem' }}>
@@ -1866,14 +1866,15 @@ export default function PatientView({ activeHospital, onSwitchToHospitals }) {
           padding: '1rem'
         }}>
           <div style={{
-            background: '#ffffff',
+            background: 'var(--bg-surface)',
             borderRadius: '16px',
             padding: '1.75rem',
             maxWidth: '440px',
             width: '100%',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            border: '1px solid var(--border-subtle)'
           }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#090d16', marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
               Cancel Appointment &amp; Request Refund
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem', lineHeight: 1.4 }}>
