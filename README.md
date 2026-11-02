@@ -1,11 +1,10 @@
 # MediQ – Smart OPD Queue Tracker & Healthcare Marketplace
-### Project Code: SOCCA - 12 | Silver Oak University (NAAC A+)
 
 Intelligent OPD queue tracker, clinical triage optimization engine, and hyperlocal 15-minute pharmacy fulfillment ecosystem.
 
-[Live Demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [License](LICENSE)
+[Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [License](LICENSE)
 
-![MediQ App Icon](public/app_icon.png)
+![Screenshot](docs/screenshot.png)  <!-- TODO: owner to add -->
 
 ---
 
@@ -18,10 +17,10 @@ Intelligent OPD queue tracker, clinical triage optimization engine, and hyperloc
 - **Ponytail Route Splitting:** Lazy-loaded modular routing reducing initial web bundle from 1,543 kB to 146 kB (90.5% payload reduction).
 
 ## Tech Stack
-Frontend: React 19, Vite 6, Tailwind CSS, 4 Native Flutter Apps (Doctor, Patient, Pharmacy, Rider)  
-Backend: Node.js, Express, Firebase Cloud Functions v2, Redis 7 (Primitives & Locks)  
-Database: PostgreSQL 16 (Relational EMR Schema), Cloud Firestore (Mumbai asia-south1)  
-Deploy: Firebase Production Hosting, Docker Compose, Nginx, GitHub Actions CI/CD  
+- **Frontend:** React 19, Vite 6, Tailwind CSS, 4 Native Flutter Apps (Doctor, Patient, Pharmacy, Rider)
+- **Backend:** Node.js, Express, Firebase Cloud Functions v2, Redis 7 (Primitives & Locks)
+- **Database:** PostgreSQL 16 (Relational EMR Schema), Cloud Firestore (Mumbai asia-south1)
+- **Deployment:** Firebase Production Hosting, Docker Compose, Nginx, GitHub Actions CI/CD
 
 ## Architecture
 
@@ -45,7 +44,7 @@ flowchart TD
 - Node.js 20+ (tested on Node 20 and 24)
 - Docker & Docker Compose (optional for local PostgreSQL & Redis)
 
-### Installation
+### Setup
 1. Clone the repository:
    ```bash
    git clone https://github.com/yashpatadiya1724-cmyk/OPD.git
@@ -62,12 +61,12 @@ flowchart TD
    npm install
    ```
 
-4. Run the local development server:
+4. Start the app:
    ```bash
    npm run dev
    ```
 
-5. Run automated test suites:
+5. Run tests:
    ```bash
    npm test
    ```
@@ -77,15 +76,37 @@ flowchart TD
 docker compose up -d
 ```
 
-## API & Endpoints
-- **Live Production Web Console:** [smart-opd-queue-tracker.web.app](https://smart-opd-queue-tracker.web.app)
-- **Waiting Room TV Stream:** [smart-opd-queue-tracker.web.app/?role=tv](https://smart-opd-queue-tracker.web.app/?role=tv)
-- **Database Schema:** Defined in [`src/db/schema.sql`](src/db/schema.sql) with demo seed data in [`src/db/seed.sql`](src/db/seed.sql).
+## Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Local web server listening port (default: `8080`) |
+| `NODE_ENV` | Application environment (`development` / `production`) |
+| `REDIS_HOST` | Redis host for atomic locks and queue pacing |
+| `REDIS_PORT` | Redis server port (default: `6379`) |
+| `REDIS_PASSWORD` | Redis authentication password |
+| `POSTGRES_HOST` | PostgreSQL host for EMR relational ledger |
+| `POSTGRES_PORT` | PostgreSQL port (default: `5432`) |
+| `POSTGRES_DB` | PostgreSQL database name (`mediq_db`) |
+| `POSTGRES_USER` | PostgreSQL username (`postgres`) |
+| `POSTGRES_PASSWORD` | PostgreSQL connection password |
+| `VITE_FIREBASE_API_KEY` | Public Firebase API key for web authentication |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase web authentication domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase cloud project identifier |
+| `VITE_FIREBASE_STORAGE_BUCKET`| Firebase storage bucket URL |
+| `JAN_AUSHADHI_API_URL` | Integration endpoint for PMBJP generic medicine mapping |
+| `RAZORPAY_KEY_ID` | Payment gateway key for pharmacy orders |
+| `RAZORPAY_KEY_SECRET` | Payment gateway signing secret |
 
 ## Security and Privacy
-- **Strict Role Isolation:** Patients access only their own medical history; doctors access active daily queue patients; riders/pharmacy view delivery addresses and prescription names without clinical diagnostic notes.
-- **Audit Logging:** System logs track every actor access (`actor_id`, `role`, `action`, `resource_id`) to ensure compliance with India's Digital Personal Data Protection (DPDP) Act 2023.
-- **Rate Limiting:** Sliding-window rate limiter prevents token abuse and scraping.
+- **Strict Role Isolation (RBAC):**
+  - **Patients:** View their own active tokens, consultation history, and prescription delivery status.
+  - **Doctors:** Access active daily OPD consultation queue and write digital prescriptions.
+  - **Pharmacy:** View prescribed medicine salt names and quantities without patient clinical diagnostic notes.
+  - **Riders:** View pickup/drop addresses and delivery verification codes only.
+  - **Hospital Admin / Receptionist:** Issue daily queue tokens and view aggregate flow telemetry.
+- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) is structured following India's Digital Personal Data Protection (DPDP) Act 2023 guidelines.
+- **Queue Concurrency:** Distributed Redis locks (`SET key val NX EX 5`) prevent token duplication and race conditions during high-volume OPD queue advancement.
 
 ## Roadmap
 - [x] Dynamic EWMA queue pacing engine
@@ -98,7 +119,9 @@ docker compose up -d
 ## What I Learned
 - Monolithic bundles on clinical reception desks severely degrade user experience; dynamic lazy-loading with Vite rollup chunking reduced our payload by over 90%.
 - Concurrent token advancement without atomic locks causes duplicate patient calling in high-volume OPDs; Redis atomic locks cleanly solve queue race conditions.
-- Adhering to Pradhan Mantri Bhartiya Janaushadhi Pariyojana generic salt formulas drastically cuts prescription costs for rural patients.
+
+## Author
+Yash Patadiya: [LinkedIn](https://www.linkedin.com/in/yash-patadiya-973161272/)
 
 ## License
 MIT
