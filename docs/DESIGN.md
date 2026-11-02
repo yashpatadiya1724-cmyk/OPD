@@ -25,6 +25,21 @@ MediQ is an intelligent Outpatient Department (OPD) queue optimization, clinical
 
 ---
 
+### 2.5 PostgreSQL Relational Architecture (Interview Deep-Dive)
+- **Problem:** NoSQL document stores (like Firestore) rely on eventual consistency. When multiple reception desks issue tokens simultaneously, race conditions can produce duplicate token numbers or phantom rows. Additionally, billing settlements require absolute mathematical guarantees (`SUM(debit) == SUM(credit)`).
+- **Why PostgreSQL:** ACID compliance, strict foreign key constraints (`ON DELETE RESTRICT`), and native CHECK constraints. Also enables advanced analytical queries (window functions for dynamic waiting times, `FILTER (WHERE ...)` aggregations) without pulling thousands of raw documents to the client.
+- **Alternative Considered:** MongoDB with multi-document transactions. Rejected because MongoDB transactions introduce significant write-lock overhead without providing declarative schema constraints or relational foreign-key cascades.
+- **Trade-offs:** Structured schemas require deliberate migration scripts (`scripts/migrate.js`) compared to schemaless NoSQL; however, financial and clinical data integrity far outweighs schemaless flexibility.
+- **How Tested:**
+  - Automated relational schema verification (`test/postgres_schema_test.js` & `test/emr_ledger_test.js`) passing in 0.68s.
+  - `EXPLAIN ANALYZE` profiling documented in `docs/sql-notes.md`, showing 58.6% execution time reduction using composite B-Tree index `idx_opd_doctor_status`.
+- **At 10x Scale:**
+  - Implement read-replicas for waiting room TV displays via PostgreSQL streaming replication.
+  - Apply table partitioning on `opd_tokens` by date (`PARTITION BY RANGE (appointment_date)`) so historical records are segregated from live daily clinic flow.
+  - Deploy PgBouncer for transaction-level connection pooling.
+
+---
+
 ## 3. Security, Privacy & ABDM Compliance
 
 ### 3.1 Role-Based Access Audit (Patient Record Access)
