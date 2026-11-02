@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { RAZORPAY_CONFIG } from '../firebase';
+import { getRouteById } from '../routes/routeConfig.js';
+import { ROUTES } from '../routes/routeConstants.js';
+import { useRouter } from '../routes/RouterContext.jsx';
 
 export default function AdminTopBar({ 
   currentRole, 
@@ -22,6 +25,15 @@ export default function AdminTopBar({
   onOpenMobileDrawer 
 }) {
   const { currentUser } = useAuth();
+
+  let routerContext = null;
+  try {
+    routerContext = useRouter();
+  } catch {
+    // Fallback if not wrapped in RouterProvider
+  }
+
+  const activeRole = routerContext?.currentRouteId || currentRole;
 
   const [theme, setTheme] = React.useState(() => {
     return localStorage.getItem('opd_theme') || 'light';
@@ -36,25 +48,18 @@ export default function AdminTopBar({
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
-  const roleTitles = {
-    hospitals: { section: 'Marketplace', title: 'Hospitals & Clinic Directory' },
-    patient: { section: 'Clinical Operations', title: 'Patient Live Queue & Token Booking' },
-    history: { section: 'Patient Records', title: 'My OPD Visits & Digital Prescriptions' },
-    doctor: { section: 'Clinical Console', title: 'Doctor Consultation & Triage Room' },
-    pharmacy: { section: 'Facility Operations', title: 'Hospital Pharmacy & Generic Substitution' },
-    reception: { section: 'Front Desk', title: 'Reception Desk & Walk-in Token Issue' },
-    tv: { section: 'Waiting Area', title: 'Waiting Room Live TV Display' },
-    admin: { section: 'Governance', title: 'Hospital Analytics & Doctor KYC Approvals' },
-    super_admin: { section: 'Platform Admin', title: 'Super Admin Console & Multi-Hospital Ledgers' },
-    account: { section: 'Profile & Security', title: 'My Clinical Account & ABDM Profile' },
-    overview: { section: 'Project Exhibition', title: 'MediQ Poster & 5-Step Methodology (SOCCA-12)' },
-    ocr: { section: 'AI Vision & Diagnostics', title: 'Handwritten Prescription OCR & Generic Optimizer' },
-    abdm: { section: 'National Health Mission', title: 'Ayushman Bharat ABHA Card & Health Locker' },
-    fulfillment: { section: 'Doorstep Fulfillment', title: 'Scheduled Rider Delivery & EV Fleet Tracking' },
-    rider: { section: 'Rider Operations', title: 'MediQ Rider Console & Doorstep OTP Terminal' }
-  };
+  const routeDef = getRouteById(activeRole);
+  const currentInfo = routeDef
+    ? { section: routeDef.section, title: routeDef.shortTitle || routeDef.title }
+    : { section: 'MediQ', title: 'Healthcare Management' };
 
-  const currentInfo = roleTitles[currentRole] || { section: 'MediQ', title: 'Healthcare Management' };
+  const handleNavigate = (targetRole) => {
+    if (routerContext) {
+      routerContext.navigate(targetRole);
+    } else if (setCurrentRole) {
+      setCurrentRole(targetRole);
+    }
+  };
 
   return (
     <header style={{
@@ -125,7 +130,7 @@ export default function AdminTopBar({
         {/* Active Hospital Pill */}
         {activeHospital && (
           <button
-            onClick={() => setCurrentRole('hospitals')}
+            onClick={() => handleNavigate(ROUTES.HOSPITALS)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -152,16 +157,16 @@ export default function AdminTopBar({
 
         {/* SOCCA-12 Official Project Poster Shortcut */}
         <button
-          onClick={() => setCurrentRole('overview')}
+          onClick={() => handleNavigate(ROUTES.OVERVIEW)}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.4rem',
             padding: '0.35rem 0.75rem',
             borderRadius: '2rem',
-            background: currentRole === 'overview' ? '#0284c7' : 'rgba(2, 132, 199, 0.1)',
+            background: activeRole === ROUTES.OVERVIEW ? '#0284c7' : 'rgba(2, 132, 199, 0.1)',
             border: '1.5px solid #0284c7',
-            color: currentRole === 'overview' ? '#ffffff' : '#0284c7',
+            color: activeRole === ROUTES.OVERVIEW ? '#ffffff' : '#0284c7',
             fontSize: '0.72rem',
             fontWeight: 900,
             cursor: 'pointer',
@@ -240,7 +245,7 @@ export default function AdminTopBar({
         {/* User Profile Pill */}
         {currentUser && (
           <button
-            onClick={() => setCurrentRole('account')}
+            onClick={() => handleNavigate(ROUTES.ACCOUNT)}
             style={{
               display: 'flex',
               alignItems: 'center',

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { seedDemoData, subscribePendingDoctors, subscribeUserHistory } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { NAVIGATION_GROUPS, ROUTE_DEFINITIONS } from '../routes/routeConfig.js';
+import { useRouter } from '../routes/RouterContext.jsx';
 
 export default function AdminSidebar({ 
   currentRole, 
@@ -67,51 +69,54 @@ export default function AdminSidebar({
     }
   };
 
-  const navGroups = [
-    {
-      group: 'CLINICAL OPERATIONS',
-      items: [
-        { id: 'hospitals', label: 'Hospital Directory', icon: Building2 },
-        { id: 'patient', label: 'Patient Queue & Tokens', icon: User },
-        { id: 'history', label: 'My Visit History', icon: Clock, badge: historyCount },
-        { id: 'doctor', label: 'Doctor Console', icon: Stethoscope },
-      ]
-    },
-    {
-      group: 'FACILITY OPERATIONS',
-      items: [
-        { id: 'pharmacy', label: 'Pharmacy & Dispense', icon: Pill },
-        { id: 'reception', label: 'Reception Queue Desk', icon: ClipboardList },
-        { id: 'tv', label: 'Waiting Room TV Display', icon: Tv },
-      ]
-    },
-    {
-      group: 'POSTER INNOVATIONS (LIVE)',
-      items: [
-        { id: 'ocr', label: 'Prescription OCR (AI)', icon: Scan, badge: 'AI VISION' },
-        { id: 'abdm', label: 'ABDM & ABHA Locker', icon: ShieldCheck, badge: 'ABHA' },
-        { id: 'fulfillment', label: 'Scheduled Rider Delivery', icon: Bike, badge: 'HOME RIDER' },
-        { id: 'rider', label: 'Rider Mobile Console', icon: Bike, badge: 'RIDER APP' },
-      ]
-    },
-    {
-      group: 'PROJECT EXHIBITION (SOCCA-12)',
-      items: [
-        { id: 'overview', label: 'Poster & Methodology', icon: Sparkles, badge: 'SOCCA-12' },
-      ]
-    },
-    {
-      group: 'GOVERNANCE & LEDGER',
-      items: [
-        { id: 'admin', label: 'Analytics & KYC Approval', icon: BarChart3, badge: pendingCount },
-        { id: 'super_admin', label: 'Super Admin Console', icon: Activity },
-        { id: 'account', label: 'My Clinical Profile', icon: ShieldCheck },
-      ]
-    }
-  ];
+  let routerContext = null;
+  try {
+    routerContext = useRouter();
+  } catch {
+    // Graceful fallback if rendered outside RouterProvider
+  }
+
+  const activeRole = routerContext?.currentRouteId || currentRole;
+
+  const ICON_MAP = {
+    Building2,
+    User,
+    Clock,
+    Stethoscope,
+    Pill,
+    ClipboardList,
+    Tv,
+    Scan,
+    ShieldCheck,
+    Bike,
+    Sparkles,
+    BarChart3,
+    Activity,
+  };
+
+  const navGroups = NAVIGATION_GROUPS.map((grp) => ({
+    group: grp.group,
+    items: grp.routeIds.map((id) => {
+      const def = ROUTE_DEFINITIONS[id];
+      let dynamicBadge = def?.badge;
+      if (id === 'history' && historyCount > 0) dynamicBadge = historyCount;
+      if (id === 'admin' && pendingCount > 0) dynamicBadge = pendingCount;
+
+      return {
+        id,
+        label: def?.shortTitle || id,
+        icon: ICON_MAP[def?.icon] || FileText,
+        badge: dynamicBadge,
+      };
+    }),
+  }));
 
   const handleItemClick = (id) => {
-    setCurrentRole(id);
+    if (routerContext) {
+      routerContext.navigate(id);
+    } else if (setCurrentRole) {
+      setCurrentRole(id);
+    }
     if (onCloseMobileDrawer) onCloseMobileDrawer();
   };
 
@@ -259,7 +264,7 @@ export default function AdminSidebar({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = currentRole === item.id;
+                const isActive = activeRole === item.id;
                 return (
                   <button
                     key={item.id}
