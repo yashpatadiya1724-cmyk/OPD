@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.git
+.agents
+.gemini
+*.apk
+release_apks
+*.log
+scratch
+*.docx

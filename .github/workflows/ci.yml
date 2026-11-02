@@ -1,0 +1,32 @@
+name: MediQ CI/CD Automated Verification Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Build & Verify Test Suites
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Project Dependencies
+        run: npm ci
+
+      - name: Execute Automated Algorithmic & Router Tests
+        run: npm test
+
+      - name: Compile Production Web Distribution (Vite)
+        run: npm run build

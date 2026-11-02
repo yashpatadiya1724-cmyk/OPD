@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # 1. MediQ Frontend Web Application (Nginx Multi-Stage Container)
+  mediq-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediq-web-production
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      mediq-redis:
+        condition: service_healthy
+      mediq-postgres:
+        condition: service_healthy
+    networks:
+      - mediq-network
+
+  # 2. Redis In-Memory Cache, Token Locks & OTP Rate Limiter
+  mediq-redis:
+    image: redis:7-alpine
+    container_name: mediq-redis-cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass mediq_secure_redis_2026
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "mediq_secure_redis_2026", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - mediq-network
+
+  # 3. PostgreSQL Relational Database for EMR, ABDM Records & Double-Entry Ledger
+  mediq-postgres:
+    image: postgres:16-alpine
+    container_name: mediq-postgres-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mediq_healthcare
+      POSTGRES_USER: mediq_admin
+      POSTGRES_PASSWORD: mediq_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/init_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediq_admin -d mediq_healthcare"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - mediq-network
+
+networks:
+  mediq-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local

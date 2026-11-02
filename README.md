@@ -10,6 +10,7 @@
 ---
 
 [![Silver Oak University](https://img.shields.io/badge/University-Silver_Oak_University_(NAAC_A%2B)-72102A?style=for-the-badge&logo=civicrm&logoColor=white)](https://silveroakuni.ac.in)
+[![CI Pipeline](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml)
 [![SOCCA](https://img.shields.io/badge/Institute-SOCCA_(Project_SOCCA--12)-0F172A?style=for-the-badge&logo=academia&logoColor=white)](#-12-silver-oak-university-100-mark-evaluation-rubric-alignment)
 [![Firebase Hosting](https://img.shields.io/badge/Hosting-Firebase_Live_Production-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://smart-opd-queue-tracker.web.app)
 [![Flutter](https://img.shields.io/badge/Mobile_Apps-4_Dedicated_Flutter_APKs-02569B?style=for-the-badge&logo=flutter&logoColor=white)](#-4-ecosystem-client-surfaces-mobile--web)
