@@ -20,6 +20,7 @@ const TEST_FILES = [
   'ewma_pacing_test.js',
   'redis_service_test.js',
   'emr_ledger_test.js',
+  'postgres_schema_test.js',
 ];
 
 console.log('====================================================');

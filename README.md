@@ -18,8 +18,9 @@ Intelligent OPD queue tracker, clinical triage optimization engine, and hyperloc
 
 ## Tech Stack
 - **Frontend:** React 19, Vite 6, Tailwind CSS, 4 Native Flutter Apps (Doctor, Patient, Pharmacy, Rider)
-- **Backend:** Node.js, Express, Firebase Cloud Functions v2, Redis 7 (Primitives & Locks)
-- **Database:** PostgreSQL 16 (Relational EMR Schema), Cloud Firestore (Mumbai asia-south1)
+- **Backend & Cloud:** Firebase Cloud Functions v2, Node.js (Express server in Docker)
+- **Database:** Cloud Firestore (Live Production Data), PostgreSQL 16 (Relational EMR Schema & Migration Seed)
+- **Concurrency & Caching:** Redis 7 (Atomic Queue Advance Locks & EWMA Pacing)
 - **Deployment:** Firebase Production Hosting, Docker Compose, Nginx, GitHub Actions CI/CD
 
 ## Architecture
