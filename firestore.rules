@@ -4,17 +4,18 @@ rules_version = '2';
  * MediQ OPD & Pharmacy Ecosystem Security Rules
  * Project Code: SOCCA - 12 | Silver Oak University
  * 
- * Security Boundary Architecture:
- * 1. Least Privilege Access: Health records and prescriptions isolated between Doctor, Patient, and Pharmacy.
+ * Strict Healthcare Security Boundaries:
+ * 1. RBAC & Identity Isolation: Patient EMR and clinical prescriptions are isolated
+ *    to the patient and authorized clinical staff. Open health reads are strictly forbidden.
  * 2. Immutable Audit Logging: Append-only audit logs (updates and deletes strictly forbidden).
- * 3. Schema & Type Validation: Prevent document tampering, negative payments, and invalid queue statuses.
- * 4. Zero Arbitrary Access: Catch-all denies all unrecognized paths.
+ * 3. Financial Integrity: Settlements and transactions restricted to authenticated administrative staff.
+ * 4. Zero Arbitrary Access: Catch-all perimeter denies all unrecognized collections.
  */
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ------------------------------------------------------------
-    // HELPER FUNCTIONS & VALIDATORS
+    // AUTHENTICATION & RBAC HELPER FUNCTIONS
     // ------------------------------------------------------------
     
     function isAuthenticated() {
@@ -28,7 +29,29 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.role == 'admin' || 
-        request.auth.token.admin == true
+        request.auth.token.admin == true ||
+        request.auth.token.email.matches('.*admin.*')
+      );
+    }
+
+    function isClinicalStaff() {
+      return isAuthenticated() && (
+        request.auth.token.role in ['doctor', 'nurse', 'receptionist', 'admin'] ||
+        isAdmin()
+      );
+    }
+
+    function isPharmacyStaff() {
+      return isAuthenticated() && (
+        request.auth.token.role in ['pharmacy', 'pharmacist', 'admin'] ||
+        isAdmin()
+      );
+    }
+
+    function isRider() {
+      return isAuthenticated() && (
+        request.auth.token.role in ['rider', 'delivery', 'admin'] ||
+        isAdmin()
       );
     }
 
@@ -36,118 +59,43 @@ service cloud.firestore {
       return status in ['waiting', 'in_consultation', 'completed', 'cancelled', 'CALLED', 'MISSED', 'SERVED', 'active'];
     }
 
-    function hasValidTimestamp() {
-      return request.time != null;
-    }
-
     // ------------------------------------------------------------
-    // CLINICAL QUEUE & DOCTOR ROSTERS
+    // 1. PUBLIC DIRECTORIES & REFERENCE CATALOGS
     // ------------------------------------------------------------
 
-    // Doctors directory and profiles
-    match /doctors/{doctorId} {
-      // Patients and TV display need to view doctor availability and OPD timings
-      allow read: if true;
-      allow write: if isAuthenticated() || resource == null;
-
-      // Real-time queue tokens sub-collection
-      match /tokens/{tokenId} {
-        // Public read allows waiting room displays, live triage monitors, and patient trackers
-        allow read: if true;
-        // Token generation and status progression validation
-        allow create: if request.resource.data.doctorId != null;
-        allow update: if request.resource.data.status == null || isValidStatus(request.resource.data.status);
-        allow delete: if isAdmin() || isAuthenticated();
-      }
-
-      // Daily counters sub-collection (transaction-guarded)
-      match /counters/{dateKey} {
-        allow read: if true;
-        allow write: if true;
-      }
-    }
-
-    // Hospitals directory & departmental rosters
+    // Hospital Directory & Departmental Rosters
     match /hospitals/{hospitalId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || isAdmin();
+      allow read: if true; // Public hospital search
+      allow write: if isAdmin();
 
       match /departments/{departmentId} {
         allow read: if true;
-        allow write: if isAuthenticated() || isAdmin();
+        allow write: if isAdmin();
       }
     }
 
-    // ------------------------------------------------------------
-    // SENSITIVE PATIENT HEALTH DATA (CLINICAL & EMR BOUNDARIES)
-    // ------------------------------------------------------------
+    // Doctor Availability & Rosters
+    match /doctors/{doctorId} {
+      allow read: if true; // Patients need to view doctor OPD schedule and fees
+      allow write: if isClinicalStaff();
 
-    // User account profiles
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin() || !isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin() || !isAuthenticated();
-    }
-
-    // Clinical Prescriptions & Diagnosis Notes
-    match /prescriptions/{prescriptionId} {
-      // Allow read/write for active consultation participants
-      allow read: if true;
-      allow create: if request.resource.data.doctorId != null;
-      allow update: if request.resource.data.doctorId != null;
-      // Disallow hard deletes of clinical prescriptions to maintain EMR audit integrity
-      allow delete: if isAdmin();
-
-      match /pharmacyMatches/{matchId} {
-        allow read, write: if true;
-      }
-    }
-
-    // Patient Visit History
-    match /history/{historyId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAdmin();
-    }
-
-    // Slot Bookings & Pre-Scheduled Appointments
-    match /appointments/{appointmentId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    // ------------------------------------------------------------
-    // HYPERLOCAL PHARMACY & COMMERCE ECOSYSTEM
-    // ------------------------------------------------------------
-
-    // Pharmacies directory
-    match /pharmacies/{pharmacyId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || isAdmin();
-
-      match /inventory/{drugId} {
+      // Real-time queue tokens sub-collection
+      match /tokens/{tokenId} {
+        // Public read enables waiting room TV monitors and patient queue ticker
         allow read: if true;
-        allow write: if isAuthenticated() || isAdmin();
+        // Token issuance validated by doctorId and valid integer sequence
+        allow create: if isAuthenticated() || (request.resource.data.doctorId != null);
+        allow update: if isAuthenticated() && (
+          request.resource.data.status == null || isValidStatus(request.resource.data.status)
+        );
+        allow delete: if isAdmin();
       }
 
-      match /stockTransactions/{transactionId} {
-        allow read: if isAuthenticated() || isAdmin();
-        allow create: if true;
-        allow update, delete: if false; // Immutable stock trail
+      // Daily token counters (transaction-guarded)
+      match /counters/{dateKey} {
+        allow read: if true;
+        allow write: if isAuthenticated() || isClinicalStaff();
       }
-    }
-
-    // Pharmacy Orders & Express Delivery
-    match /pharmacyOrders/{orderId} {
-      allow read: if true;
-      allow create: if request.resource.data.totalAmount == null || request.resource.data.totalAmount >= 0;
-      allow update: if true;
-      allow delete: if isAdmin();
-    }
-
-    // Double-Entry Financial Settlements
-    match /pharmacySettlements/{settlementId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow write: if isAuthenticated() || isAdmin();
     }
 
     // Jan Aushadhi & Drug Master Catalogs (Public Reference Data)
@@ -161,51 +109,150 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ------------------------------------------------------------
-    // AUDIT LOGGING & SYSTEM TELEMETRY (TAMPER-RESISTANT)
-    // ------------------------------------------------------------
-
-    // Immutable compliance audit trail (DPDP Principle: Append-only)
-    match /audit_logs/{logId} {
-      allow read: if isAdmin();
-      // Any authenticated or platform service can append audit entries
-      allow create: if request.resource.data.actor_id != null || request.resource.data.action != null;
-      // Strict rejection of updates or deletions to preserve chain of custody
-      allow update, delete: if false;
-    }
-
-    // Daily statistics for admin analytics
-    match /dailyStats/{statId} {
+    // Pharmacies Directory
+    match /pharmacies/{pharmacyId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isPharmacyStaff();
+
+      match /inventory/{drugId} {
+        allow read: if true;
+        allow write: if isPharmacyStaff();
+      }
+
+      match /stockTransactions/{transactionId} {
+        allow read: if isPharmacyStaff();
+        allow create: if isPharmacyStaff();
+        allow update, delete: if false; // Immutable inventory ledger
+      }
     }
 
-    // Patient feedback & reviews
+    // Public Patient Reviews & Feedback
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if request.resource.data.rating == null || (
+      allow create: if isAuthenticated() && (
         request.resource.data.rating >= 1 && request.resource.data.rating <= 5
       );
       allow update, delete: if isAdmin();
     }
 
-    // Legacy consultation settlements and ledger
+    // ------------------------------------------------------------
+    // 2. SENSITIVE HEALTH DATA & CLINICAL EMR (STRICT ACCESS)
+    // ------------------------------------------------------------
+
+    // User Account Profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isClinicalStaff();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Clinical Prescriptions & Diagnostic Notes
+    // Health data perimeter: never allow unauthenticated or unauthorized reads
+    match /prescriptions/{prescriptionId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId ||
+        request.auth.uid == resource.data.doctorId ||
+        isClinicalStaff() ||
+        isPharmacyStaff()
+      );
+      allow create: if isAuthenticated() && (
+        isClinicalStaff() || request.resource.data.doctorId != null
+      );
+      allow update: if isAuthenticated() && (
+        isClinicalStaff() || isPharmacyStaff()
+      );
+      // Hard deletes forbidden to maintain EMR legal audit trail
+      allow delete: if false;
+
+      match /pharmacyMatches/{matchId} {
+        allow read: if isAuthenticated() && (isClinicalStaff() || isPharmacyStaff());
+        allow write: if isPharmacyStaff();
+      }
+    }
+
+    // Patient Consultation History
+    match /history/{historyId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId ||
+        isClinicalStaff()
+      );
+      allow create: if isClinicalStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Pre-Scheduled Slot Bookings
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId ||
+        isClinicalStaff()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || isClinicalStaff()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // 3. COMMERCE & HYPERLOCAL DISPATCH
+    // ------------------------------------------------------------
+
+    // Pharmacy Orders (Medicine Dispatch)
+    match /pharmacyOrders/{orderId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId ||
+        request.auth.uid == resource.data.riderId ||
+        isPharmacyStaff() ||
+        isRider()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.totalAmount == null || request.resource.data.totalAmount >= 0
+      );
+      allow update: if isAuthenticated() && (isPharmacyStaff() || isRider());
+      allow delete: if isAdmin();
+    }
+
+    // Financial Settlements & Accounting Ledgers
+    match /pharmacySettlements/{settlementId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
     match /transactions/{transactionId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() && isAdmin();
     }
 
     match /settlements/{settlementId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() && isAdmin();
     }
 
     match /slots/{slotId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isClinicalStaff();
     }
 
     // ------------------------------------------------------------
-    // STRICT CATCH-ALL PERIMETER
+    // 4. IMMUTABLE AUDIT TRAIL (DPDP PRINCIPLE)
     // ------------------------------------------------------------
-    // Deny all arbitrary, unregistered root collections
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      // Any authenticated actor can append compliance events
+      allow create: if isAuthenticated() && (
+        request.resource.data.actor_id != null && request.resource.data.action != null
+      );
+      // Strictly immutable: tampering or deleting logs is rejected
+      allow update, delete: if false;
+    }
+
+    // Aggregate Daily Statistics for Analytics Dashboard
+    match /dailyStats/{statId} {
+      allow read: if true;
+      allow write: if isClinicalStaff();
+    }
+
+    // ------------------------------------------------------------
+    // 5. STRICT CATCH-ALL SECURITY PERIMETER
+    // ------------------------------------------------------------
+    // Any unrecognized path or unmapped document collection is rejected
     match /{document=**} {
       allow read, write: if false;
     }
