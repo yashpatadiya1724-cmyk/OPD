@@ -2,7 +2,8 @@
 
 Intelligent OPD queue tracker, clinical triage optimization engine, and hyperlocal 15-minute pharmacy fulfillment ecosystem.
 
-[Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [License](LICENSE)
+[![CI](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml)
+[Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [SQL Notes](docs/sql-notes.md) | [Benchmarks](docs/BENCHMARKS.md) | [Redis Notes](docs/redis-notes.md) | [License](LICENSE)
 
 ![Screenshot](docs/screenshot.png)  <!-- TODO: owner to add -->
 
@@ -11,16 +12,16 @@ Intelligent OPD queue tracker, clinical triage optimization engine, and hyperloc
 ## Features
 - **Dynamic EWMA Queue Pacing:** Predicts accurate consultation wait times with outlier suppression ($\alpha = 0.35$), preventing chaotic hospital waiting rooms.
 - **Role-Based Access Control (RBAC):** Strict security perimeter separating Patient, Doctor, Pharmacy, EV Delivery Rider, and Hospital Admin surfaces.
-- **Redis Distributed Locking:** Prevents queue token race conditions when multiple clinical triage staff advance queues simultaneously.
-- **Jan Aushadhi Generic Medicine Savings:** Maps branded doctor prescriptions to PMBJP generic salts, saving patients up to 70% on healthcare costs.
-- **Double-Entry EMR Financial Ledger:** Audited settlement ledger ensuring balanced accounts across consultations and pharmacy deliveries.
-- **Ponytail Route Splitting:** Lazy-loaded modular routing reducing initial web bundle from 1,543 kB to 146 kB (90.5% payload reduction).
+- **Redis Distributed Locking:** Prevents queue token race conditions (`SET key val NX EX 5` with atomic Lua releases) when multiple clinical triage staff advance queues simultaneously.
+- **Jan Aushadhi Generic Medicine Savings:** Maps branded doctor prescriptions to PMBJP generic salts, saving patients up to 74.7% on healthcare costs (e.g. Pantoprazole 40mg MRP ₹95 reduced to PMBJP generic ₹24, verified against Government of India PMBJP price benchmarks).
+- **Double-Entry EMR Financial Ledger:** Mathematically audited settlement engine (`src/db/emrLedger.js`) enforcing $\sum \text{Debit} \equiv \sum \text{Credit}$ across consultations and pharmacy disbursements.
+- **Ponytail Route Splitting:** Dynamic lazy-loaded routing reducing initial web bundle from 1,543 kB down to 146.6 kB (90.5% payload reduction measured via Vite production build).
 
 ## Tech Stack
 - **Frontend:** React 19, Vite 6, Tailwind CSS, 4 Native Flutter Apps (Doctor, Patient, Pharmacy, Rider)
 - **Backend & Cloud:** Firebase Cloud Functions v2, Node.js (Express server in Docker)
 - **Database:** Cloud Firestore (Live Production Data), PostgreSQL 16 (Relational EMR Schema & Migration Seed)
-- **Concurrency & Caching:** Redis 7 (Atomic Queue Advance Locks & EWMA Pacing)
+- **Concurrency & Caching:** Redis 7 (Atomic Queue Advance Locks, OTP TTL & Sliding-Window Rate Limiting)
 - **Deployment:** Firebase Production Hosting, Docker Compose, Nginx, GitHub Actions CI/CD
 
 ## Architecture
@@ -67,9 +68,19 @@ flowchart TD
    npm run dev
    ```
 
-5. Run tests:
+5. Run unit & algorithmic tests:
    ```bash
    npm test
+   ```
+
+6. Run Playwright E2E tests:
+   ```bash
+   npm run test:e2e
+   ```
+
+7. Run high-concurrency benchmarks:
+   ```bash
+   npm run benchmark
    ```
 
 ### Docker Compose (Full Stack with PostgreSQL & Redis)
@@ -106,19 +117,21 @@ docker compose up -d
   - **Pharmacy:** View prescribed medicine salt names and quantities without patient clinical diagnostic notes.
   - **Riders:** View pickup/drop addresses and delivery verification codes only.
   - **Hospital Admin / Receptionist:** Issue daily queue tokens and view aggregate flow telemetry.
-- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) is structured following India's Digital Personal Data Protection (DPDP) Act 2023 guidelines.
+- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) and patient data handling are **designed with DPDP principles in mind** (least-privilege role boundaries and unbundled data views for pharmacy/riders).
 - **Queue Concurrency:** Distributed Redis locks (`SET key val NX EX 5`) prevent token duplication and race conditions during high-volume OPD queue advancement.
 
 ## Roadmap
-- [x] Dynamic EWMA queue pacing engine
-- [x] Ponytail lazy route splitting (90.5% bundle reduction)
-- [x] Redis atomic queue advance locks & OTP TTL
-- [x] PostgreSQL normalized schema & Double-entry EMR ledger
-- [ ] National ABDM M1/M2 milestone production integration
-- [ ] Automated hospital emergency bed telemetry gateway
+- [x] **Done:** Dynamic EWMA queue pacing engine (outlier suppression $\alpha = 0.35$, tested in `test/ewma_pacing_test.js`)
+- [x] **Done:** Ponytail lazy route splitting (measured 90.5% bundle reduction: 1,543 kB to 146.6 kB)
+- [x] **Done:** Redis atomic queue advance locks (`SET NX EX 5`), OTP TTL, and sliding-window rate limiting (tested in `test/redis_service_test.js`)
+- [x] **Done:** PostgreSQL relational schema, migration runner, and Double-entry EMR ledger (tested in `test/emr_ledger_test.js` & `test/postgres_schema_test.js`)
+- [x] **Done:** Playwright End-to-End automated testing suite (tested in `test/e2e/mediq_flows.spec.js`)
+- [x] **Done:** High-concurrency load testing & benchmarks (measured 27,835 req/sec via autocannon in `docs/BENCHMARKS.md`)
+- [ ] **Planned:** National ABDM M1/M2 milestone production integration (FHIR R4 bundle generator implemented, sandbox certification planned)
+- [ ] **Planned:** Automated hospital emergency bed telemetry gateway
 
 ## What I Learned
-- Monolithic bundles on clinical reception desks severely degrade user experience; dynamic lazy-loading with Vite rollup chunking reduced our payload by over 90%.
+- Monolithic bundles on clinical reception desks severely degrade user experience; dynamic lazy-loading with Vite rollup chunking reduced our payload by over 90% (from 1,543 kB down to 146.6 kB).
 - Concurrent token advancement without atomic locks causes duplicate patient calling in high-volume OPDs; Redis atomic locks cleanly solve queue race conditions.
 
 ## Author

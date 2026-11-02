@@ -7,6 +7,9 @@ dist/
 .env.*
 !.env.example
 scratch/
+.agents/
+test-results/
+playwright-report/
 
 # Flutter / Dart
 .dart_tool/
