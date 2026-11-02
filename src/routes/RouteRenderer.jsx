@@ -1,29 +1,72 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useRouter } from './RouterContext.jsx';
 import { ROUTES } from './routeConstants.js';
 import ErrorBoundary from '../components/ErrorBoundary.jsx';
 import NotFoundView from './NotFoundView.jsx';
 
-import HospitalDirectory from '../components/HospitalDirectory.jsx';
-import PatientView from '../components/PatientView.jsx';
-import HistoryView from '../components/HistoryView.jsx';
-import AccountView from '../components/AccountView.jsx';
-import DoctorDashboard from '../components/DoctorDashboard.jsx';
-import DoctorAuthKYC from '../components/DoctorAuthKYC.jsx';
-import ReceptionDashboard from '../components/ReceptionDashboard.jsx';
-import PublicDisplay from '../components/PublicDisplay.jsx';
-import AdminAnalytics from '../components/AdminAnalytics.jsx';
-import PharmacyConsole from '../components/PharmacyConsole.jsx';
-import SuperAdminPanel from '../components/SuperAdminPanel.jsx';
-import ProjectShowcase from '../components/ProjectShowcase.jsx';
-import PrescriptionOCRView from '../components/PrescriptionOCRView.jsx';
-import ABDMHealthLockerView from '../components/ABDMHealthLockerView.jsx';
-import ScheduledRiderDeliveryView from '../components/ScheduledRiderDeliveryView.jsx';
+// ── Lazy-loaded Route Components for Code-Splitting (Ponytail Senior Architecture) ──
+const HospitalDirectory = lazy(() => import('../components/HospitalDirectory.jsx'));
+const PatientView = lazy(() => import('../components/PatientView.jsx'));
+const HistoryView = lazy(() => import('../components/HistoryView.jsx'));
+const AccountView = lazy(() => import('../components/AccountView.jsx'));
+const DoctorDashboard = lazy(() => import('../components/DoctorDashboard.jsx'));
+const DoctorAuthKYC = lazy(() => import('../components/DoctorAuthKYC.jsx'));
+const ReceptionDashboard = lazy(() => import('../components/ReceptionDashboard.jsx'));
+const PublicDisplay = lazy(() => import('../components/PublicDisplay.jsx'));
+const AdminAnalytics = lazy(() => import('../components/AdminAnalytics.jsx'));
+const PharmacyConsole = lazy(() => import('../components/PharmacyConsole.jsx'));
+const SuperAdminPanel = lazy(() => import('../components/SuperAdminPanel.jsx'));
+const ProjectShowcase = lazy(() => import('../components/ProjectShowcase.jsx'));
+const PrescriptionOCRView = lazy(() => import('../components/PrescriptionOCRView.jsx'));
+const ABDMHealthLockerView = lazy(() => import('../components/ABDMHealthLockerView.jsx'));
+const ScheduledRiderDeliveryView = lazy(() => import('../components/ScheduledRiderDeliveryView.jsx'));
+
+/**
+ * Lightweight, zero-dependency pulsing skeleton loader during route lazy fetch.
+ */
+function ViewSkeletonLoader({ title = 'MediQ Surface' }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '65vh',
+      gap: '1.25rem',
+      color: 'var(--text-secondary, #64748B)',
+      textAlign: 'center',
+      padding: '2rem 1rem',
+    }}>
+      <div style={{
+        width: '44px',
+        height: '44px',
+        border: '3.5px solid rgba(2, 132, 199, 0.15)',
+        borderTopColor: '#0284C7',
+        borderRadius: '50%',
+        animation: 'spin 0.75s linear infinite',
+      }} />
+      <div>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary, #0F172A)' }}>
+          Loading {title}...
+        </p>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #94A3B8)' }}>
+          MediQ Smart OPD Network &bull; SOCCA-12
+        </span>
+      </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 /**
  * RouteRenderer Component
- * Dynamically renders the active surface component based on the central route registry.
- * Wraps view components in an ErrorBoundary to prevent localized errors from crashing the app.
+ * Dynamically resolves and renders the active surface component based on the central route registry.
+ * Employs native React.lazy() code-splitting and ErrorBoundary fault isolation.
  */
 export default function RouteRenderer({
   activeHospital,
@@ -208,7 +251,9 @@ export default function RouteRenderer({
 
   return (
     <ErrorBoundary>
-      {renderActiveView()}
+      <Suspense fallback={<ViewSkeletonLoader />}>
+        {renderActiveView()}
+      </Suspense>
     </ErrorBoundary>
   );
 }

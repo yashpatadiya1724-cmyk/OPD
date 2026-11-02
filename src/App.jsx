@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RouterProvider, useRouter } from './routes/RouterContext.jsx';
 import { ROUTES } from './routes/routeConstants.js';
@@ -8,8 +8,9 @@ import AdminSidebar from './components/AdminSidebar';
 import AdminTopBar from './components/AdminTopBar';
 import BlinkitFulfillmentModal from './components/BlinkitFulfillmentModal';
 import AuthModal from './components/AuthModal';
-import PublicDisplay from './components/PublicDisplay';
 import ErrorBoundary from './components/ErrorBoundary';
+
+const PublicDisplay = lazy(() => import('./components/PublicDisplay'));
 
 function AppContent() {
   const { isAuthModalOpen, closeAuthModal, authModalRole, currentUser } = useAuth();
@@ -46,7 +47,9 @@ function AppContent() {
   if (currentRouteId === ROUTES.TV) {
     return (
       <div style={{ minHeight: '100vh', background: '#090d16' }}>
-        <PublicDisplay onExit={() => navigate(ROUTES.HOSPITALS)} />
+        <Suspense fallback={<div style={{ color: '#ffffff', textAlign: 'center', padding: '3rem', fontWeight: 800 }}>Connecting to Live Hospital TV...</div>}>
+          <PublicDisplay onExit={() => navigate(ROUTES.HOSPITALS)} />
+        </Suspense>
       </div>
     );
   }
