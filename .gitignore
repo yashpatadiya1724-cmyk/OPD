@@ -3,6 +3,10 @@ node_modules/
 dist/
 .firebase/
 *-debug.log*
+.env
+.env.*
+!.env.example
+scratch/
 
 # Flutter / Dart
 .dart_tool/
