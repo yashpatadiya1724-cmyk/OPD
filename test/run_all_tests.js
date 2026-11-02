@@ -18,6 +18,8 @@ const TEST_FILES = [
   'jan_aushadhi_test.js',
   'fhir_bundle_test.js',
   'ewma_pacing_test.js',
+  'redis_service_test.js',
+  'emr_ledger_test.js',
 ];
 
 console.log('====================================================');
