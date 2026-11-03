@@ -1,7 +1,7 @@
 # MediQ Redis Architecture, Distributed Locks & Rate Limiting Notes
 ### Project Code: SOCCA-12 | Silver Oak University
 
-This document details MediQ's Redis 7 in-memory cache architecture, distributed lock primitives, auto-expiring OTP storage, and sliding-window rate limiters.
+This document details MediQ's Redis 7 in-memory cache architecture, distributed lock primitives, auto-expiring OTP storage, sliding-window rate limiters, and edge-case failure recovery models.
 
 ---
 
@@ -29,7 +29,7 @@ SET lock:doctor:call_next:DOC-8821 "token_17412891_ab9f2" NX EX 10
 ```
 
 **Safe Release via Lua Script (Avoids Accidental Deletion):**
-If process A experiences GC pause and its lock expires, process B acquires it. Process A must NOT delete Process B's lock!
+If process A experiences a GC pause and its lock expires, process B acquires it. Process A must NOT delete Process B's lock!
 ```lua
 if redis.call("get", KEYS[1]) == ARGV[1] then
     return redis.call("del", KEYS[1])
@@ -37,6 +37,23 @@ else
     return 0
 end
 ```
+
+### A.1 Distributed Lock Edge Cases & Failure Recovery (Interview Defense)
+
+1. **Garbage Collection (GC) Pause / Process Stalling:**
+   - **Edge Case:** Worker A acquires lock with TTL = 10s. Worker A encounters a severe 12-second Stop-The-World GC pause or network hang. Redis auto-expires Worker A's lock. Worker B requests the lock, succeeds, and begins queue progression. Worker A wakes up and blindly calls `DEL lock:doctor:...`.
+   - **Mitigation:** The atomic Lua script compares the stored secret token with `ARGV[1]`. Because Worker B's token is now active, Worker A's token mismatch evaluates to false, returning `0` and preventing Worker A from destroying Worker B's lock.
+
+2. **Server Crash Before Lock Release (Orphan Prevention):**
+   - **Edge Case:** The Node.js application process dies (OOM, segfault, or host power cut) after acquiring the lock but before reaching the `finally { releaseLock() }` block.
+   - **Mitigation:** MediQ couples lock creation with expiration in a single atomic primitive (`SET ... NX EX 10`). Because the expiration is registered inside the Redis engine simultaneously with key creation, the lock is guaranteed to be reclaimed after 10 seconds even if the client process abruptly vanishes.
+
+3. **Clock Drift Across Distributed Servers:**
+   - **Edge Case:** Discrepancies between NTP clock synchronization on separate client hosts could cause divergent assumptions about lock expiration.
+   - **Mitigation:** Lock expiry is calculated monotonically on the Redis server instance via relative time-to-live (`EX` seconds / `PX` milliseconds), eliminating reliance on client-side wall clocks.
+
+4. **Single-Node vs. Redlock Trade-Off:**
+   - For single-facility hospital OPD installations, a single Redis master with Append-Only File (`AOF`) logging guarantees `<1ms` lock acquisition latency without network consensus overhead. In multi-region deployments, the Redlock algorithm across 3+ independent nodes would be required to prevent split-brain states during master-replica failovers.
 
 ---
 
