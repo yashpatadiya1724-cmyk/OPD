@@ -25,16 +25,16 @@ import {
 } from "firebase/auth";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyCFe8xhMFk-UWafaqaNKJIVxADkM8RrL34",
-  authDomain: "smart-opd-queue-tracker.firebaseapp.com",
-  projectId: "smart-opd-queue-tracker",
-  storageBucket: "smart-opd-queue-tracker.firebasestorage.app",
-  messagingSenderId: "489741916150",
-  appId: "1:489741916150:web:969809047cf4bca9c8d9d7",
-  measurementId: "G-9F3QR1DYXJ"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "smart-opd-queue-tracker.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "smart-opd-queue-tracker",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "smart-opd-queue-tracker.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "489741916150",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:489741916150:web:969809047cf4bca9c8d9d7",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-9F3QR1DYXJ"
 };
 
-export const RAZORPAY_KEY_ID = "rzp_test_TmxKQ0fOUHs5z8";
+export const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder";
 
 export const razorpayConfig = {
   keyId: RAZORPAY_KEY_ID,

@@ -3,7 +3,7 @@
 Intelligent OPD queue tracker, clinical triage optimization engine, and hyperlocal pharmacy dispatch & generic medicine cost-optimization pilot.
 
 [![CI](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml)
-[Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [SQL Notes](docs/sql-notes.md) | [Benchmarks](docs/BENCHMARKS.md) | [Redis Notes](docs/redis-notes.md) | [License](LICENSE)
+[Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [Security](docs/SECURITY.md) | [SQL Notes](docs/sql-notes.md) | [Benchmarks](docs/BENCHMARKS.md) | [Redis Notes](docs/redis-notes.md) | [License](LICENSE)
 
 ![Screenshot](docs/screenshot.png)  <!-- TODO: owner to add -->
 
@@ -149,7 +149,7 @@ docker compose up -d
   - **Pharmacy:** View prescribed medicine salt names and quantities without patient clinical diagnostic notes.
   - **Riders:** View pickup/drop addresses and delivery verification codes only.
   - **Hospital Admin / Receptionist:** Issue daily queue tokens and view aggregate flow telemetry.
-- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) and patient data handling are **designed with DPDP principles in mind** (least-privilege role boundaries and unbundled data views for pharmacy/riders).
+- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) and patient data handling are **designed with DPDP principles in mind** (least-privilege role boundaries and unbundled data views for pharmacy/riders). See [Security Policy & Governance](docs/SECURITY.md) for vulnerability disclosure and secret management details.
 - **Queue Concurrency:** Distributed Redis locks (`SET key val NX EX 5`) prevent token duplication and race conditions during high-volume OPD queue advancement.
 
 ## Roadmap
