@@ -2,7 +2,7 @@
 
 Intelligent OPD queue tracker, clinical triage optimization engine, and hyperlocal pharmacy dispatch & generic medicine cost-optimization pilot.
 
-[![CI](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-pink.svg)](https://github.com/sponsors/yashpatadiya1724-cmyk)
+[![CI](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-pink.svg)](https://github.com/sponsors/yashpatadiya1724-cmyk) [![Docker Package](https://img.shields.io/badge/Docker-GHCR%20Package-blue.svg?logo=docker)](https://github.com/yashpatadiya1724-cmyk?tab=packages&repo_name=OPD)
 [Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [Security](docs/SECURITY.md) | [SQL Notes](docs/sql-notes.md) | [Benchmarks](docs/BENCHMARKS.md) | [Redis Notes](docs/redis-notes.md) | [Sponsor](https://github.com/sponsors/yashpatadiya1724-cmyk) | [License](LICENSE)
 
 <!-- Live demo available at https://smart-opd-queue-tracker.web.app -->
