@@ -2,7 +2,7 @@
  * MediQ Unified Test Suite Runner
  * Project Code: SOCCA - 12 | Silver Oak College of Computer Applications
  * 
- * Executes all algorithmic, router, ABDM, pharmacy, DPDP, token display, and native helper test suites.
+ * Executes all algorithmic, router, ABDM, pharmacy, DPDP, offline triage, token display, and native helper test suites.
  * Exit code 0 if all pass; exit code 1 if any failure occurs.
  */
 
@@ -20,6 +20,7 @@ const TEST_FILES = [
   'dpdp_consent_test.js',
   'pharmacy_dispatch_test.js',
   'token_display_broadcaster_test.js',
+  'offline_queue_storage_test.js',
   'ewma_pacing_test.js',
   'redis_service_test.js',
   'emr_ledger_test.js',
