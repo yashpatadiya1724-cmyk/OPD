@@ -341,3 +341,119 @@ export function searchBySaltOrCategory(saltOrCategory) {
     );
   });
 }
+
+// ── Pradhan Mantri Bhartiya Janaushadhi Pariyojana (PMBJP) Kendra Directory ──
+
+export const PMBJP_KENDRA_DIRECTORY = [
+  {
+    kendraId: 'PMBJP-GJ-AHM-001',
+    name: 'Jan Aushadhi Kendra — Gota Cross Road',
+    address: 'Shop 12, Satyam Complex, Near Silver Oak University, Gota, Ahmedabad - 382481',
+    latitude: 23.0882,
+    longitude: 72.5312,
+    phone: '+91 79 2766 1120',
+    operatingHours: '08:00 AM - 10:00 PM',
+    rating: 4.8,
+    isOpen: true,
+    hasGenericStock: true,
+  },
+  {
+    kendraId: 'PMBJP-GJ-AHM-002',
+    name: 'Jan Aushadhi Kendra — Sola Civil Hospital Gate',
+    address: 'Near Trauma Center Gate, Sola Civil Hospital Road, Ahmedabad - 380060',
+    latitude: 23.0768,
+    longitude: 72.5254,
+    phone: '+91 79 2766 4501',
+    operatingHours: '24 Hours',
+    rating: 4.9,
+    isOpen: true,
+    hasGenericStock: true,
+  },
+  {
+    kendraId: 'PMBJP-GJ-AHM-003',
+    name: 'Jan Aushadhi Kendra — Ghatlodia T-Point',
+    address: 'Ground Floor, Shanti Chambers, Ghatlodia, Ahmedabad - 380061',
+    latitude: 23.0645,
+    longitude: 72.5410,
+    phone: '+91 79 2741 8892',
+    operatingHours: '09:00 AM - 09:30 PM',
+    rating: 4.6,
+    isOpen: true,
+    hasGenericStock: true,
+  },
+  {
+    kendraId: 'PMBJP-GJ-AHM-004',
+    name: 'Jan Aushadhi Kendra — Chandlodiya Station Road',
+    address: 'Near Railway Crossing, Chandlodiya, Ahmedabad - 382481',
+    latitude: 23.0811,
+    longitude: 72.5488,
+    phone: '+91 79 2760 3341',
+    operatingHours: '08:30 AM - 09:00 PM',
+    rating: 4.5,
+    isOpen: true,
+    hasGenericStock: true,
+  },
+  {
+    kendraId: 'PMBJP-GJ-AHM-005',
+    name: 'Jan Aushadhi Kendra — Bopal Ambli Road',
+    address: 'Shop 4, Gala Empire, South Bopal, Ahmedabad - 380058',
+    latitude: 23.0338,
+    longitude: 72.4632,
+    phone: '+91 79 2970 5512',
+    operatingHours: '09:00 AM - 10:00 PM',
+    rating: 4.7,
+    isOpen: true,
+    hasGenericStock: true,
+  },
+];
+
+export function calculateGeoDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(2));
+}
+
+export function findNearestJanAushadhiKendras(userLat, userLng, maxRadiusKm = 15, limit = 3) {
+  if (userLat === undefined || userLng === undefined || isNaN(userLat) || isNaN(userLng)) {
+    throw new Error('Valid user coordinates (latitude, longitude) are required');
+  }
+
+  return PMBJP_KENDRA_DIRECTORY.map((kendra) => {
+    const distanceKm = calculateGeoDistanceKm(userLat, userLng, kendra.latitude, kendra.longitude);
+    const estimatedMinutes = Math.max(3, Math.round(distanceKm * 3.5 + 2));
+
+    return {
+      ...kendra,
+      distanceKm,
+      estimatedTravelMinutes: estimatedMinutes,
+      withinSearchRadius: distanceKm <= maxRadiusKm,
+    };
+  })
+    .filter((k) => k.distanceKm <= maxRadiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit);
+}
+
+export function calculatePrescriptionSavingsWithNearestKendra({ items, userLat, userLng, maxRadiusKm = 15 }) {
+  const savings = calculatePrescriptionSavings(items);
+  const kendras = findNearestJanAushadhiKendras(userLat, userLng, maxRadiusKm);
+
+  return {
+    ...savings,
+    nearestKendra: kendras.length > 0 ? kendras[0] : null,
+    alternativeKendras: kendras.slice(1),
+    recommendedSavingsMessage:
+      savings.overallSavingsPct >= 70
+        ? `Switching to Jan Aushadhi generic equivalents saves ${savings.overallSavingsPct}% (₹${savings.totalSaved}) at your nearest Kendra.`
+        : `Jan Aushadhi generic alternatives save ₹${savings.totalSaved}.`,
+  };
+}
+
