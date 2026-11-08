@@ -5,12 +5,14 @@ Intelligent OPD queue tracker, clinical triage optimization engine, and hyperloc
 [![CI](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml/badge.svg)](https://github.com/yashpatadiya1724-cmyk/OPD/actions/workflows/ci.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-pink.svg)](https://github.com/sponsors/yashpatadiya1724-cmyk) [![Docker Package](https://img.shields.io/badge/Docker-GHCR%20Package-blue.svg?logo=docker)](https://github.com/yashpatadiya1724-cmyk?tab=packages&repo_name=OPD)
 [Live demo](https://smart-opd-queue-tracker.web.app) | [Docs](docs/DESIGN.md) | [Security](docs/SECURITY.md) | [SQL Notes](docs/sql-notes.md) | [Benchmarks](docs/BENCHMARKS.md) | [Redis Notes](docs/redis-notes.md) | [Sponsor](https://github.com/sponsors/yashpatadiya1724-cmyk) | [License](LICENSE)
 
-<!-- Live demo available at https://smart-opd-queue-tracker.web.app -->
+<p align="center">
+  <img src="public/evaluation_criteria.png" alt="MediQ OPD Platform Architecture & Evaluation" width="85%" style="border-radius: 8px;" />
+</p>
 
 ---
 
 ## Features
-- **Dynamic EWMA Queue Pacing:** Predicts accurate consultation wait times with outlier suppression ($\alpha = 0.35$), preventing chaotic hospital waiting rooms.
+- **Dynamic EWMA Queue Pacing & Multi-Tier Triage:** Predicts consultation wait times with outlier suppression ($\alpha = 0.35$) and anti-starvation clinical triage scoring (`src/utils/pacing.js`), prioritizing emergency shock/trauma and vulnerable cohorts.
 - **Role-Based Access Control (RBAC):** Strict security perimeter separating Patient, Doctor, Pharmacy, Delivery Rider, and Hospital Admin surfaces.
 - **Redis Distributed Locking:** Prevents queue token race conditions (`SET key val NX EX 5` with atomic Lua releases) when multiple clinical triage staff advance queues simultaneously.
 - **Jan Aushadhi Generic Medicine Savings:** Maps branded doctor prescriptions to PMBJP generic salts, saving patients up to 74.7% on healthcare costs (e.g. Pantoprazole 40mg MRP ₹95 reduced to PMBJP generic ₹24, verified against Government of India PMBJP price benchmarks).
@@ -63,7 +65,7 @@ flowchart TD
 - **Relational EMR Schema & Ledger:** PostgreSQL migrations and double-entry balanced transactions tested in `test/postgres_schema_test.js` & `test/emr_ledger_test.js`.
 - **ABDM FHIR Bundle Generator:** NHA Ayushman Bharat Digital Mission (ABDM) FHIR R4 JSON bundle generator and schema validator implemented and verified in `test/fhir_bundle_test.js`.
 - **4 Native Flutter Mobile Apps:** Source code complete in `doctor_app/`, `patient_app/`, `pharmacy_app/`, and `rider_app/`.
-- **Automated Verification:** 8 unit & algorithmic test suites (100% pass) + 3 Playwright E2E browser flows.
+- **Automated Verification:** 14 unit & algorithmic test suites (100% pass) including multi-tier clinical triage and anti-starvation validation + 3 Playwright E2E browser flows.
 
 ### Pilot / Educational Prototype Boundaries (Honest Disclosure)
 - **Live Data:** The platform runs with realistic simulated pilot/seed data; it is not currently deployed to active hospital emergency wards.
