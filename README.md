@@ -61,7 +61,7 @@ flowchart TD
 ### What is Fully Built & Verified in Code
 - **React 19 Web Platform:** 14 modular views (Reception desk, Patient queue tracking, Waiting room TV display, Doctor console, Pharmacy inventory and Jan Aushadhi generic mapping, and EMR audit ledger).
 - **EWMA Queue Pacing Engine:** Exponential weighted moving average with outlier suppression ($\alpha = 0.35$), tested in `test/ewma_pacing_test.js`.
-- **Redis Concurrency Layer:** Atomic doctor triage locks (`SET NX EX 5`), single-use delivery OTP with TTL, and sliding-window rate limiting, tested in `test/redis_service_test.js` and load-tested at 27,835 req/sec in [Benchmarks](docs/BENCHMARKS.md).
+- **Redis Concurrency Layer:** Atomic doctor triage locks (`SET NX EX 5`), single-use delivery OTP with TTL, and sliding-window rate limiting, tested in `test/redis_service_test.js` and token endpoint load test (in-memory, loopback) at 3,737.2 req/sec median (p99: 11 ms) in [Benchmarks](docs/BENCHMARKS.md).
 - **Relational EMR Schema & Ledger:** PostgreSQL migrations and double-entry balanced transactions tested in `test/postgres_schema_test.js` & `test/emr_ledger_test.js`.
 - **ABDM FHIR Bundle Generator:** NHA Ayushman Bharat Digital Mission (ABDM) FHIR R4 JSON bundle generator and schema validator implemented and verified in `test/fhir_bundle_test.js`.
 - **4 Native Flutter Mobile Apps:** Source code complete in `doctor_app/`, `patient_app/`, `pharmacy_app/`, and `rider_app/`.
@@ -160,7 +160,7 @@ docker compose up -d
 - [x] **Done:** Redis atomic queue advance locks (`SET NX EX 5`), OTP TTL, and sliding-window rate limiting (tested in `test/redis_service_test.js`)
 - [x] **Done:** PostgreSQL relational schema, migration runner, and Double-entry EMR ledger (tested in `test/emr_ledger_test.js` & `test/postgres_schema_test.js`)
 - [x] **Done:** Playwright End-to-End automated testing suite (tested in `test/e2e/mediq_flows.spec.js`)
-- [x] **Done:** High-concurrency load testing & benchmarks (measured 27,835 req/sec via autocannon in [Benchmarks](docs/BENCHMARKS.md))
+- [x] **Done:** High-concurrency token endpoint load test (in-memory, loopback) & benchmarks (measured 3,737.2 req/sec median, p99: 11 ms via autocannon in [Benchmarks](docs/BENCHMARKS.md))
 - [ ] **Planned:** National ABDM M1/M2 milestone production integration (FHIR R4 bundle generator implemented, sandbox certification planned)
 - [ ] **Planned:** Automated hospital emergency bed telemetry gateway
 

@@ -95,7 +95,8 @@ server.listen(PORT, async () => {
     console.log(`Throughput:          ${(result.throughput.average / 1024 / 1024).toFixed(2)} MB/sec`);
     console.log(`Latency (Average):   ${result.latency.average} ms`);
     console.log(`Latency (p50):       ${result.latency.p50} ms`);
-    console.log(`Latency (p95):       ${result.latency.p95} ms`);
+    console.log(`Latency (p90):       ${result.latency.p90} ms`);
+    console.log(`Latency (p97.5):     ${result.latency.p97_5} ms`);
     console.log(`Latency (p99):       ${result.latency.p99} ms`);
     console.log(`Max Latency:         ${result.latency.max} ms`);
     console.log(`Successful (2xx):    ${result['2xx']}`);

@@ -21,36 +21,37 @@ Each incoming request to `/api/token/issue` executes four core operations:
 ## 2. Benchmark Environment & Results (Measured via Autocannon)
 
 ### 2.1 Host Machine & Hardware Specifications
-To ensure scientific reproducibility, the benchmarks were conducted on a dedicated developer workstation with the following verified physical specifications:
+To ensure scientific reproducibility, the benchmarks were conducted on a developer workstation with the following physical specifications:
 
 | Component | Specification |
 |---|---|
-| **Processor (CPU)** | 13th Gen Intel(R) Core(TM) i7-1355U (10 Cores: 2 Performance + 8 Efficient, 12 Threads, up to 5.00 GHz) |
-| **System Memory (RAM)** | 16.0 GB DDR4/DDR5 (15.7 GB usable physical memory) |
-| **Operating System** | Microsoft Windows 11 Home Single Language (Build 22631, 64-bit x64) |
-| **JavaScript Runtime** | Node.js v24.14.0 (V8 Engine v13.4) |
+| **Processor (CPU)** | 13th Gen Intel(R) Core(TM) i7-1355U |
+| **System Memory (RAM)** | 15.65 GB |
+| **Operating System** | Microsoft Windows 11 Home Single Language (Build 26300, 64-bit x64) |
+| **JavaScript Runtime** | Node.js v24.14.0 |
 | **Benchmark Tool** | `autocannon v8.0.0` (HTTP/1.1 load generator) |
 | **Network Interface** | Local loopback (`127.0.0.1:8089`), eliminating external WAN jitter |
 | **Harness Script** | `test/benchmark_token_pacing.js` |
 
 ### 2.2 Test Configuration
 - **Concurrency:** 10 simultaneous connections
-- **Duration:** 5.01 seconds
+- **Duration:** 5.05 seconds (median of 3 runs)
 - **Protocol:** HTTP/1.1 with JSON payload serialization and pipelining = 1
 - **Concurrency Distribution:** Requests distributed across 50 distinct reception desks and 10 active doctor triage lanes
 
-### 2.3 Measured Performance Summary
+### 2.3 Measured Performance Summary (Median of 3 Runs)
 
 | Metric | Measured Value | Analysis / Interpretation |
 |---|---|---|
-| **Total Requests Handled** | **139,180 requests** | High throughput without memory leaks or buffer exhaustion |
-| **Throughput (Req/Sec)** | **27,835.2 req/sec** | Readily handles peak morning clinic rush hours |
-| **Data Throughput** | **7.97 MB/sec** | Compact, lean payload design |
-| **Latency (p50 / Median)** | **< 1 ms (0.03 ms avg)** | Instantaneous response for clinical reception UI |
-| **Latency (p99)** | **1.00 ms** | 99% of requests complete within 1 millisecond |
-| **Max Latency** | **21.00 ms** | Controlled tail latency under 10 concurrent threads |
-| **HTTP 2xx Success Rate** | **100.0% (139,180 / 139,180)** | Zero dropped requests |
-| **Non-2xx / Errors** | **0 errors (0.0%)** | Zero lock collisions or unhandled rejections |
+| **Total Requests Handled** | **18,680 requests** | Median across 3 runs (18,680 / 17,480 / 20,020) |
+| **Throughput (Req/Sec)** | **3,737.2 req/sec** | Median across 3 runs (3,737.2 / 3,497.2 / 4,004.8 req/sec) |
+| **Data Throughput** | **1.07 MB/sec** | Median across 3 runs (1.07 / 1.00 / 1.14 MB/sec) |
+| **Latency (p50 / Median)** | **1 ms (2.13 ms avg)** | Median across 3 runs (avg: 2.13 / 2.32 / 1.95 ms) |
+| **Latency (p90 / p97.5)** | **6 ms / 9 ms** | Median across 3 runs (p97.5: 9 / 10 / 9 ms) |
+| **Latency (p99)** | **11 ms** | Median across 3 runs (11 / 11 / 10 ms) |
+| **Max Latency** | **72 ms** | Median across 3 runs (131 / 72 / 70 ms) |
+| **HTTP 2xx Success Rate** | **100.0% (18,680 / 18,680)** | Zero dropped requests |
+| **Non-2xx / Errors** | **0 errors (0.0%)** | 0 non-2xx responses |
 
 ---
 
