@@ -57,13 +57,22 @@ To ensure scientific reproducibility, the benchmarks were conducted on a develop
 
 ## 3. How to Reproduce
 
-Run the automated benchmark locally:
-```bash
-# In the OPD directory:
-node test/benchmark_token_pacing.js
-```
+### Prerequisites & Environment
+- **Node.js version:** Verified on `v24.14.0` (`node -v`).
+- **Mode:** This benchmark runs **in-memory** (`REDIS_HOST` is not set), so it measures the local Node.js HTTP server and in-memory rate-limiting, locking, and EWMA path without external Redis network latency.
+- **Hardware variance:** Absolute throughput and latency numbers will differ across machines, CPU power profiles, and OS schedulers.
 
-Or run via npm test script:
+### Recommended Measurement Protocol
+1. Connect your laptop/workstation to AC power (charger plugged in) and close heavy background applications to minimize thermal throttling and CPU contention.
+2. Run the exact benchmark command from the repository root (`OPD`):
+   ```bash
+   node test/benchmark_token_pacing.js
+   ```
+3. Execute **at least 3 runs** back-to-back and report the **median** across runs to reduce single-run scheduling noise.
+
+> **Note:** Runs on the same machine varied from 1,658 to 4,005 req/sec (p99 11 to 23 ms).
+
+Or run via npm script:
 ```bash
 npm run benchmark
 ```
