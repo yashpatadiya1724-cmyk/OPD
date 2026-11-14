@@ -15,7 +15,7 @@ Intelligent OPD queue tracker, clinical triage optimization engine, and hyperloc
 - **Dynamic EWMA Queue Pacing & Multi-Tier Triage:** Predicts consultation wait times with outlier suppression ($\alpha = 0.35$) and anti-starvation clinical triage scoring (`src/utils/pacing.js`), prioritizing emergency shock/trauma and vulnerable cohorts.
 - **Role-Based Access Control (RBAC):** Strict security perimeter separating Patient, Doctor, Pharmacy, Delivery Rider, and Hospital Admin surfaces.
 - **Redis Distributed Locking:** Prevents queue token race conditions (`SET key val NX EX 5` with atomic Lua releases) when multiple clinical triage staff advance queues simultaneously.
-- **Jan Aushadhi Generic Medicine Savings:** Maps branded doctor prescriptions to PMBJP generic salts, saving patients up to 74.7% on healthcare costs (e.g. Pantoprazole 40mg MRP ₹95 reduced to PMBJP generic ₹24, verified against Government of India PMBJP price benchmarks).
+- **Jan Aushadhi Generic Medicine Savings:** Maps branded doctor prescriptions to PMBJP generic salts. Example from the catalog: Pantoprazole 40mg Rs 95 to Rs 24 (74.7%). Prices come from a catalog in src/utils/janAushadhiComparator.js and were not independently verified.
 - **Double-Entry EMR Financial Ledger:** Mathematically audited settlement engine (`src/db/emrLedger.js`) enforcing $\sum \text{Debit} \equiv \sum \text{Credit}$ across consultations and pharmacy disbursements.
 - **Ponytail Route Splitting:** Dynamic lazy-loaded routing reducing initial web bundle from 1,543 kB down to 146.6 kB (90.5% payload reduction measured via Vite production build).
 
@@ -47,7 +47,7 @@ flowchart TD
 
 ### 1. Why both Cloud Firestore and PostgreSQL?
 - **Cloud Firestore (Operational Real-time Layer):** The patient web tracker, reception triage desk, and waiting room TV displays require reactive WebSocket snapshot listeners (`onSnapshot`) to push instant token increments and status transitions without expensive client polling.
-- **PostgreSQL 16 (Relational EMR & Double-Entry Ledger):** Clinical billing, doctor accreditation rosters, and audited journal entries require strict ACID transactions, foreign key integrity (`ON DELETE RESTRICT`), and relational joins. Our normalized schema and double-entry ledger (`src/db/emrLedger.js`) mathematically guarantee that debits equal credits across settlements. Hand-crafted raw queries with `EXPLAIN ANALYZE` demonstrate a 58.6% query speedup via composite indexing (see [SQL Notes](docs/sql-notes.md)).
+- **PostgreSQL 16 (Relational EMR & Double-Entry Ledger):** Clinical billing, doctor accreditation rosters, and audited journal entries require strict ACID transactions, foreign key integrity (`ON DELETE RESTRICT`), and relational joins. Our normalized schema and double-entry ledger (`src/db/emrLedger.js`) mathematically guarantee that debits equal credits across settlements. EXPLAIN ANALYZE on seed data (36 rows, single run): 0.058 ms to 0.024 ms via composite index (see [SQL Notes](docs/sql-notes.md)).
 
 ### 2. Where does Redis run?
 - Firebase Hosting is a static web CDN and does not host persistent Redis servers. 
@@ -151,7 +151,7 @@ docker compose up -d
   - **Pharmacy:** View prescribed medicine salt names and quantities without patient clinical diagnostic notes.
   - **Riders:** View pickup/drop addresses and delivery verification codes only.
   - **Hospital Admin / Receptionist:** Issue daily queue tokens and view aggregate flow telemetry.
-- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (`actor_id`, `role`, `action`, `resource_id`) and patient data handling are **designed with DPDP principles in mind** (least-privilege role boundaries and unbundled data views for pharmacy/riders). See [Security Policy & Governance](docs/SECURITY.md) for vulnerability disclosure and secret management details.
+- **Health Data Handling & Regulatory Notice:** All health records and clinical notes are isolated per role using least-privilege principles. **No claim of HIPAA or formal international medical device certification is made for this educational/pilot platform.** Access audit logging (actor_id, role, action, resource_id) and least-privilege role views are implemented. Consent and audit behaviour is covered by test/dpdp_consent_test.js. No formal DPDP compliance claim is made. See [Security Policy & Governance](docs/SECURITY.md) for vulnerability disclosure and secret management details.
 - **Queue Concurrency:** Distributed Redis locks (`SET key val NX EX 5`) prevent token duplication and race conditions during high-volume OPD queue advancement.
 
 ## Roadmap
