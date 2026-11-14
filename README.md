@@ -144,6 +144,8 @@ docker compose up -d
 | `RAZORPAY_KEY_ID` | Payment gateway key for pharmacy orders |
 | `RAZORPAY_KEY_SECRET` | Payment gateway signing secret |
 
+POSTGRES_PASSWORD and REDIS_PASSWORD: the defaults in the code and docker-compose.yml are for local development only. Set your own values for any shared or production deployment.
+
 ## Security and Privacy
 - **Strict Role Isolation (RBAC):**
   - **Patients:** View their own active tokens, consultation history, and prescription delivery status.
